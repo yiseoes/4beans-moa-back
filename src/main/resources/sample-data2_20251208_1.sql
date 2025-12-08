@@ -1,12 +1,13 @@
 -- ============================================
 -- OTT 구독 공유 서비스 MOA 샘플 데이터
--- Version: 4.0
--- 작성일: 2025.12.05
+-- Version: 4.1 (CHATBOT_KNOWLEDGE 추가)
+-- 작성일: 2025.12.08
 -- 특징:
 --   - 관리자 계정 2개 (슈퍼관리자 + 일반관리자)
 --   - 일반 회원 20명 + 테스트 계정 1명
 --   - 파티 5개 (각 4명씩 구성)
 --   - 결제 재시도 이력 포함
+--   - 챗봇 지식 베이스 더미 데이터 포함
 -- ============================================
 
 USE moa;
@@ -14,6 +15,7 @@ USE moa;
 -- ============================================
 -- 1. 초기화 (기존 데이터 삭제)
 -- ============================================
+
 SET FOREIGN_KEY_CHECKS = 0;
 
 TRUNCATE TABLE PAYMENT_RETRY_HISTORY;
@@ -28,6 +30,7 @@ TRUNCATE TABLE USER_CARD;
 TRUNCATE TABLE ACCOUNT;
 TRUNCATE TABLE PUSH;
 TRUNCATE TABLE COMMUNITY;
+TRUNCATE TABLE CHATBOT_KNOWLEDGE;
 TRUNCATE TABLE BLACKLIST;
 TRUNCATE TABLE OAUTH_ACCOUNT;
 TRUNCATE TABLE USERS;
@@ -66,7 +69,10 @@ INSERT INTO PUSH_CODE (CODE_NAME, TITLE_TEMPLATE, CONTENT_TEMPLATE) VALUES
 ('PARTY_END', '파티 종료', '{product_name} 파티가 종료되었습니다.'),
 ('SETTLEMENT_MONTHLY', '월간 정산 완료', '{month}월 정산 금액 {amount}원이 입금될 예정입니다.'),
 ('DEPOSIT_PAID', '보증금 납부 완료', '{product_name} 파티 보증금 {amount}원 납부가 완료되었습니다.'),
-('DEPOSIT_REFUND', '보증금 환불 완료', '{product_name} 파티 보증금 {amount}원이 환불되었습니다.');
+('DEPOSIT_REFUND', '보증금 환불 완료', '{product_name} 파티 보증금 {amount}원이 환불되었습니다.'),
+('PAYMENT_RETRY', '결제 재시도 중', '{nickname}님의 {product_name} 파티 결제가 실패하여 재시도 중입니다. (시도: {attempt_number}/4)'),
+('PAYMENT_RETRY_SUCCESS', '결제 재시도 성공', '{nickname}님의 {product_name} 파티 결제가 {attempt_number}회 시도 만에 성공했습니다.'),
+('PAYMENT_RETRY_FINAL_FAIL', '결제 최종 실패', '{nickname}님의 {product_name} 파티 결제가 4회 시도 후 최종 실패했습니다. 결제 수단을 확인해주세요.');
 
 -- CATEGORY: 상품 카테고리
 INSERT INTO CATEGORY (CATEGORY_ID, CATEGORY_NAME) VALUES
@@ -88,6 +94,36 @@ INSERT INTO PRODUCT (PRODUCT_ID, CATEGORY_ID, PRODUCT_NAME, PRICE, IMAGE) VALUES
 (9, 4, '멤버십 1개월권', 3000, '/uploads/product-image/fb991d89-fcea-4ffb-b850-9ad7619808a0.png'),
 (10, 4, '멤버십 12개월권', 30000, '/uploads/product-image/fb991d89-fcea-4ffb-b850-9ad7619808a0.png');
 
+-- CHATBOT_KNOWLEDGE: 챗봇 지식 베이스 데이터
+INSERT INTO CHATBOT_KNOWLEDGE (CATEGORY, TITLE, QUESTION, ANSWER, KEYWORDS) VALUES 
+('구독', '구독상품 안내', '구독상품이 뭐가 있나요?', 'MoA에서는 OTT, 음악, 게임 등 다양한 구독상품을 제공해요.', '구독,상품,OTT,음악,게임'),
+('결제', '결제 수단 변경', '결제 카드를 바꾸고 싶어요', '마이페이지 > 결제 관리에서 카드 추가/변경이 가능해요.', '결제,카드,변경,마이페이지');
+
+SET SQL_SAFE_UPDATES = 0;
+
+DROP PROCEDURE IF EXISTS make_dummy_embedding;
+DELIMITER //
+CREATE PROCEDURE make_dummy_embedding()
+BEGIN
+    DECLARE i INT DEFAULT 0;
+    SET @vec = JSON_ARRAY();
+    WHILE i < 1536 DO
+        SET @vec = JSON_ARRAY_APPEND(@vec, '$', 0.0);
+        SET i = i + 1;
+    END WHILE;
+END //
+DELIMITER ;
+
+CALL make_dummy_embedding();
+
+UPDATE CHATBOT_KNOWLEDGE
+SET EMBEDDING = @vec
+WHERE EMBEDDING IS NULL
+  AND ID > 0;
+
+SELECT ID, JSON_LENGTH(EMBEDDING) AS EMBEDDING_SIZE
+FROM CHATBOT_KNOWLEDGE;
+
 -- ============================================
 -- 3. 회원 데이터 (관리자 + 일반회원 21명)
 -- ============================================
@@ -100,18 +136,8 @@ INSERT INTO USERS (
     LOGIN_FAIL_COUNT, UNLOCK_SCHEDULED_AT,
     DELETE_DATE, DELETE_TYPE, DELETE_DETAIL, AGREE_MARKETING
 ) VALUES
--- 슈퍼관리자 (BCrypt: 1!)
 ('admin@admin.com', '$2a$10$r4WvD.fkTss4amaWwy7/dOV1SmwrMM.GocYPXsfgTL4td2mqrHZP6', '슈퍼관리자', '01099999999', '/img/profile/super_admin.png', 'ADMIN', 'ACTIVE', '2024-01-01 00:00:00', 'CI_SUPER_ADMIN', '2024-01-01 00:00:00', '2024-12-03 09:00:00', 0, NULL, NULL, NULL, NULL, 1),
-
--- 일반관리자 (BCrypt: 1!)
 ('admin@moa.com', '$2a$10$r4WvD.fkTss4amaWwy7/dOV1SmwrMM.GocYPXsfgTL4td2mqrHZP6', '관리자', '01000000000', '/img/profile/admin.png', 'ADMIN', 'ACTIVE', '2024-01-01 00:00:00', 'CI_ADMIN_001', '2024-01-01 00:00:00', '2024-12-03 08:00:00', 0, NULL, NULL, NULL, NULL, 1),
-
--- 테스트계정 (BCrypt: 1!)
-('admintest', '$2a$10$r4WvD.fkTss4amaWwy7/dOV1SmwrMM.GocYPXsfgTL4td2mqrHZP6', '테스트관리자1', '01000000000', NULL, 'ADMIN', 'ACTIVE', '2024-01-01 00:00:00', 'CI_ADMIN_011', '2024-01-01 00:00:00', '2024-12-03 08:00:00', 0, NULL, NULL, NULL, NULL, 1),
-
-('usertest1', '$2a$10$r4WvD.fkTss4amaWwy7/dOV1SmwrMM.GocYPXsfgTL4td2mqrHZP6', '테스트사용자1', '01010010001', NULL, 'USER', 'ACTIVE', '2024-03-01 10:30:00', 'CI_USER_1', '2024-03-01 10:30:00', '2024-11-28 14:20:00', 0, NULL, NULL, NULL, NULL, 1),
-('usertest2', '$2a$10$r4WvD.fkTss4amaWwy7/dOV1SmwrMM.GocYPXsfgTL4td2mqrHZP6', '테스트사용자2', '01010010001', NULL, 'USER', 'ACTIVE', '2024-03-01 10:30:00', 'CI_USER_2', '2024-03-01 10:30:00', '2024-11-28 14:20:00', 0, NULL, NULL, NULL, NULL, 1),
--- 일반회원 20명 (BCrypt: user1234!)
 ('user001@gmail.com', '$2a$10$r4WvD.fkTss4amaWwy7/dOV1SmwrMM.GocYPXsfgTL4td2mqrHZP6', '사용자001', '01010010001', NULL, 'USER', 'ACTIVE', '2024-03-01 10:30:00', 'CI_USER_001', '2024-03-01 10:30:00', '2024-11-28 14:20:00', 0, NULL, NULL, NULL, NULL, 1),
 ('user002@naver.com', '$2a$10$r4WvD.fkTss4amaWwy7/dOV1SmwrMM.GocYPXsfgTL4td2mqrHZP6', '사용자002', '01010010002', NULL, 'USER', 'ACTIVE', '2024-03-05 11:00:00', 'CI_USER_002', '2024-03-05 11:00:00', '2024-11-29 09:15:00', 0, NULL, NULL, NULL, NULL, 0),
 ('user003@daum.net', '$2a$10$r4WvD.fkTss4amaWwy7/dOV1SmwrMM.GocYPXsfgTL4td2mqrHZP6', '사용자003', '01010010003', NULL, 'USER', 'ACTIVE', '2024-03-10 14:20:00', 'CI_USER_003', '2024-03-10 14:20:00', '2024-11-30 16:45:00', 0, NULL, NULL, NULL, NULL, 1),
@@ -132,8 +158,6 @@ INSERT INTO USERS (
 ('user018@daum.net', '$2a$10$r4WvD.fkTss4amaWwy7/dOV1SmwrMM.GocYPXsfgTL4td2mqrHZP6', '사용자018', '01010010018', NULL, 'USER', 'ACTIVE', '2024-05-25 12:35:00', 'CI_USER_018', '2024-05-25 12:35:00', '2024-11-29 16:10:00', 0, NULL, NULL, NULL, NULL, 1),
 ('user019@gmail.com', '$2a$10$r4WvD.fkTss4amaWwy7/dOV1SmwrMM.GocYPXsfgTL4td2mqrHZP6', '사용자019', '01010010019', NULL, 'USER', 'ACTIVE', '2024-06-01 15:15:00', 'CI_USER_019', '2024-06-01 15:15:00', '2024-11-30 14:30:00', 0, NULL, NULL, NULL, NULL, 1),
 ('user020@naver.com', '$2a$10$r4WvD.fkTss4amaWwy7/dOV1SmwrMM.GocYPXsfgTL4td2mqrHZP6', '사용자020', '01010010020', NULL, 'USER', 'ACTIVE', '2024-06-05 10:40:00', 'CI_USER_020', '2024-06-05 10:40:00', '2024-11-28 11:25:00', 0, NULL, NULL, NULL, NULL, 0),
-
--- 테스트 계정
 ('kjw', '$2a$10$r4WvD.fkTss4amaWwy7/dOV1SmwrMM.GocYPXsfgTL4td2mqrHZP6', '사용자aaa', '01010010099', NULL, 'USER', 'ACTIVE', '2024-06-05 10:40:00', 'CI_USER_kjw', '2024-06-05 10:40:00', '2025-12-05 14:45:59', 0, NULL, NULL, NULL, NULL, 0);
 
 -- OAUTH_ACCOUNT: 소셜 로그인 연동 (10명)

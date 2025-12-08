@@ -1,13 +1,14 @@
 -- ============================================
 -- OTT 구독 공유 서비스 MOA 데이터베이스
--- Version: 4.0 (Strict Mode + DATETIME)
--- 작성일: 2025.12.05
+-- Version: 4.1 (CHATBOT_KNOWLEDGE 추가)
+-- 작성일: 2025.12.08
 -- 특징: 
 --   - 외래키 제약조건 ALTER TABLE 분리
 --   - DATE → DATETIME 타입 변경
 --   - 순환참조 해결 구조
 --   - PAYMENT_RETRY_HISTORY 추가 (결제 재시도 이력)
 --   - USERS.PASSWORD NULL 허용 (소셜 로그인 대응)
+--   - CHATBOT_KNOWLEDGE 추가 (챗봇 지식 베이스)
 -- ============================================
 
 -- ============================================
@@ -31,10 +32,21 @@ DROP TABLE IF EXISTS PUSH;
 DROP TABLE IF EXISTS PUSH_CODE;
 DROP TABLE IF EXISTS COMMUNITY;
 DROP TABLE IF EXISTS COMMUNITY_CODE;
+DROP TABLE IF EXISTS CHATBOT_KNOWLEDGE;
 DROP TABLE IF EXISTS BLACKLIST;
 DROP TABLE IF EXISTS OAUTH_ACCOUNT;
 DROP TABLE IF EXISTS EMAIL_VERIFICATION;
 DROP TABLE IF EXISTS USERS;
+
+SET FOREIGN_KEY_CHECKS = 1;
+
+-- ============================================
+-- 2. 테이블 생성 (외래키 제약조건 제외)
+-- ============================================
+
+-- --------------------------------------------
+-- 2.1 회원 영역
+-- --------------------------------------------
 
 -- USERS: 회원 정보
 CREATE TABLE USERS (
@@ -45,7 +57,7 @@ CREATE TABLE USERS (
     PROFILE_IMAGE VARCHAR(255) NULL,
     ROLE VARCHAR(20) NOT NULL DEFAULT 'USER',
     USER_STATUS VARCHAR(20) NOT NULL,
-
+    
     REG_DATE DATETIME NOT NULL,
     CI VARCHAR(100) NULL,
     PASS_CERTIFIED_AT DATETIME NULL,
@@ -55,16 +67,15 @@ CREATE TABLE USERS (
     DELETE_DATE DATETIME NULL,
     DELETE_TYPE VARCHAR(20) NULL,
     DELETE_DETAIL VARCHAR(500) NULL,
-
+    
     AGREE_MARKETING BOOLEAN NOT NULL DEFAULT 0,
     EMAIL_VERIFICATION_TOKEN VARCHAR(200) NULL,
     EMAIL_VERIFIED_AT DATETIME NULL,
     RESET_TOKEN VARCHAR(200) NULL,
-
-    --  Google OTP 컬럼 추가
+    
     OTP_SECRET VARCHAR(64) NULL COMMENT 'Google OTP Secret',
     OTP_ENABLED TINYINT(1) NOT NULL DEFAULT 0 COMMENT 'Google OTP 활성화 여부',
-
+    
     PRIMARY KEY (USER_ID),
     UNIQUE KEY UQ_USERS_CI (CI),
     CONSTRAINT UK_USERS_USER_ID UNIQUE (USER_ID)
@@ -117,7 +128,23 @@ CREATE TABLE EMAIL_VERIFICATION (
 ) COMMENT='이메일 인증 토큰 관리';
 
 -- --------------------------------------------
--- 2.2 게시판 영역
+-- 2.2 챗봇 영역
+-- --------------------------------------------
+
+-- CHATBOT_KNOWLEDGE: 챗봇 지식 베이스
+CREATE TABLE CHATBOT_KNOWLEDGE (
+    ID BIGINT AUTO_INCREMENT PRIMARY KEY,
+    CATEGORY VARCHAR(50) NOT NULL,
+    TITLE VARCHAR(200) NOT NULL,
+    QUESTION VARCHAR(500) NOT NULL,
+    ANSWER TEXT NOT NULL,
+    KEYWORDS VARCHAR(500) NULL,
+    UPDATED_AT TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    EMBEDDING JSON NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- --------------------------------------------
+-- 2.3 게시판 영역
 -- --------------------------------------------
 
 -- COMMUNITY_CODE: 커뮤니티 카테고리 코드
@@ -176,7 +203,7 @@ CREATE TABLE PUSH (
 ) COMMENT='푸시 알림 발송 이력';
 
 -- --------------------------------------------
--- 2.3 상품/구독 영역
+-- 2.4 상품/구독 영역
 -- --------------------------------------------
 
 -- CATEGORY: 상품 카테고리
@@ -214,7 +241,7 @@ CREATE TABLE SUBSCRIPTION (
 ) COMMENT='구독 정보';
 
 -- --------------------------------------------
--- 2.4 계좌/카드 영역
+-- 2.5 계좌/카드 영역
 -- --------------------------------------------
 
 -- ACCOUNT: 정산 계좌 정보
@@ -245,7 +272,7 @@ CREATE TABLE USER_CARD (
 ) COMMENT='사용자 카드 정보 (자동결제용 빌링키)';
 
 -- --------------------------------------------
--- 2.5 파티 영역
+-- 2.6 파티 영역
 -- --------------------------------------------
 
 -- PARTY: 파티 정보
@@ -285,7 +312,7 @@ CREATE TABLE PARTY_MEMBER (
 ) COMMENT='파티 멤버 정보';
 
 -- --------------------------------------------
--- 2.6 결제/보증금 영역
+-- 2.7 결제/보증금 영역
 -- --------------------------------------------
 
 -- DEPOSIT: 보증금 정보
@@ -352,7 +379,7 @@ CREATE TABLE PAYMENT_RETRY_HISTORY (
 ) COMMENT='결제 재시도 이력 (자동결제 실패 시 최대 4회 시도 추적)';
 
 -- --------------------------------------------
--- 2.7 정산 영역
+-- 2.8 정산 영역
 -- --------------------------------------------
 
 -- SETTLEMENT: 정산 정보
@@ -411,7 +438,12 @@ ALTER TABLE EMAIL_VERIFICATION
     ON DELETE CASCADE;
 
 -- --------------------------------------------
--- 3.2 게시판 영역 외래키
+-- 3.2 챗봇 영역 외래키
+-- --------------------------------------------
+-- CHATBOT_KNOWLEDGE는 독립 테이블로 외래키 없음
+
+-- --------------------------------------------
+-- 3.3 게시판 영역 외래키
 -- --------------------------------------------
 
 ALTER TABLE COMMUNITY 
@@ -427,7 +459,7 @@ ALTER TABLE PUSH
     FOREIGN KEY (RECEIVER_ID) REFERENCES USERS(USER_ID);
 
 -- --------------------------------------------
--- 3.3 상품/구독 영역 외래키
+-- 3.4 상품/구독 영역 외래키
 -- --------------------------------------------
 
 ALTER TABLE PRODUCT 
@@ -443,7 +475,7 @@ ALTER TABLE SUBSCRIPTION
     FOREIGN KEY (PRODUCT_ID) REFERENCES PRODUCT(PRODUCT_ID);
 
 -- --------------------------------------------
--- 3.4 계좌/카드 영역 외래키
+-- 3.5 계좌/카드 영역 외래키
 -- --------------------------------------------
 
 ALTER TABLE ACCOUNT 
@@ -455,7 +487,7 @@ ALTER TABLE USER_CARD
     FOREIGN KEY (USER_ID) REFERENCES USERS(USER_ID);
 
 -- --------------------------------------------
--- 3.5 파티 영역 외래키
+-- 3.6 파티 영역 외래키
 -- --------------------------------------------
 
 ALTER TABLE PARTY 
@@ -491,7 +523,7 @@ ALTER TABLE PARTY_MEMBER
     FOREIGN KEY (FIRST_PAYMENT_ID) REFERENCES PAYMENT(PAYMENT_ID);
 
 -- --------------------------------------------
--- 3.6 결제/보증금 영역 외래키
+-- 3.7 결제/보증금 영역 외래키
 -- --------------------------------------------
 
 ALTER TABLE DEPOSIT 
@@ -519,7 +551,7 @@ ALTER TABLE PAYMENT
     FOREIGN KEY (USER_ID) REFERENCES USERS(USER_ID);
 
 -- --------------------------------------------
--- 3.7 정산 영역 외래키
+-- 3.8 정산 영역 외래키
 -- --------------------------------------------
 
 ALTER TABLE SETTLEMENT 
