@@ -18,8 +18,9 @@ USE moa;
 
 SET FOREIGN_KEY_CHECKS = 0;
 
+TRUNCATE TABLE SETTLEMENT_RETRY_HISTORY;
+TRUNCATE TABLE REFUND_RETRY_HISTORY;
 TRUNCATE TABLE PAYMENT_RETRY_HISTORY;
-TRUNCATE TABLE SETTLEMENT_DETAIL;
 TRUNCATE TABLE SETTLEMENT;
 TRUNCATE TABLE PAYMENT;
 TRUNCATE TABLE DEPOSIT;
@@ -38,12 +39,64 @@ TRUNCATE TABLE PRODUCT;
 TRUNCATE TABLE CATEGORY;
 TRUNCATE TABLE PUSH_CODE;
 TRUNCATE TABLE COMMUNITY_CODE;
+TRUNCATE TABLE BANK_CODE;
+TRUNCATE TABLE CHATBOT_KNOWLEDGE;
 
 SET FOREIGN_KEY_CHECKS = 1;
 
 -- ============================================
 -- 2. 코드성 데이터
 -- ============================================
+
+-- BANK_CODE: 은행 코드 참조 데이터
+INSERT INTO BANK_CODE (BANK_CODE, BANK_NAME, IS_ACTIVE) VALUES
+('004', 'KB국민은행', 'Y'),
+('011', 'NH농협은행', 'Y'),
+('020', '우리은행', 'Y'),
+('023', 'SC제일은행', 'Y'),
+('027', '한국씨티은행', 'Y'),
+('032', '대구은행', 'Y'),
+('034', '광주은행', 'Y'),
+('035', '제주은행', 'Y'),
+('037', '전북은행', 'Y'),
+('039', '경남은행', 'Y'),
+('045', '새마을금고', 'Y'),
+('048', '신협', 'Y'),
+('071', '우체국', 'Y'),
+('081', '하나은행', 'Y'),
+('088', '신한은행', 'Y'),
+('089', '케이뱅크', 'Y'),
+('090', '카카오뱅크', 'Y'),
+('092', '토스뱅크', 'Y'),
+('003', 'IBK기업은행', 'Y')
+ON DUPLICATE KEY UPDATE BANK_NAME = VALUES(BANK_NAME);
+
+-- CHATBOT_KNOWLEDGE: 챗봇 지식 베이스 데이터
+INSERT INTO CHATBOT_KNOWLEDGE (CATEGORY, TITLE, QUESTION, ANSWER, KEYWORDS) VALUES 
+('구독', '구독상품 안내', '구독상품이 뭐가 있나요?', 'MoA에서는 OTT, 음악, 게임 등 다양한 구독상품을 제공해요.', '구독,상품,OTT,음악,게임'),
+('결제', '결제 수단 변경', '결제 카드를 바꾸고 싶어요', '마이페이지 > 결제 관리에서 카드 추가/변경이 가능해요.', '결제,카드,변경,마이페이지');
+
+SET SQL_SAFE_UPDATES = 0;
+
+DROP PROCEDURE IF EXISTS make_dummy_embedding;
+DELIMITER //
+CREATE PROCEDURE make_dummy_embedding()
+BEGIN
+    DECLARE i INT DEFAULT 0;
+    SET @vec = JSON_ARRAY();
+    WHILE i < 1536 DO
+        SET @vec = JSON_ARRAY_APPEND(@vec, '$', 0.0);
+        SET i = i + 1;
+    END WHILE;
+END //
+DELIMITER ;
+
+CALL make_dummy_embedding();
+
+UPDATE CHATBOT_KNOWLEDGE
+SET EMBEDDING = @vec
+WHERE EMBEDDING IS NULL
+  AND ID > 0;
 
 -- COMMUNITY_CODE: 커뮤니티 카테고리
 INSERT INTO COMMUNITY_CODE (COMMUNITY_CODE_ID, CATEGORY, CODE_NAME) VALUES
@@ -419,30 +472,68 @@ INSERT INTO SETTLEMENT (
 (4, 4, 'user007@gmail.com', 7, '2024-06', 13900, 2085, 11815, 'COMPLETED', '2024-07-05 11:00:00', 'T202407050001'),
 (5, 5, 'user009@daum.net', 9, '2024-06', 29000, 4350, 24650, 'COMPLETED', '2024-07-05 11:30:00', 'T202407050002');
 
--- SETTLEMENT_DETAIL: 정산 상세 20건
-INSERT INTO SETTLEMENT_DETAIL (
-    SETTLEMENT_ID, PAYMENT_ID, PARTY_MEMBER_ID, USER_ID, PAYMENT_AMOUNT
+-- ============================================
+-- 7-1. 보증금 환불 재시도 이력
+-- ============================================
+
+-- REFUND_RETRY_HISTORY: 보증금 환불 재시도 이력 (다양한 시나리오)
+INSERT INTO REFUND_RETRY_HISTORY (
+    DEPOSIT_ID, ATTEMPT_NUMBER, ATTEMPT_DATE, RETRY_STATUS,
+    NEXT_RETRY_DATE, REFUND_AMOUNT, REFUND_REASON,
+    ERROR_CODE, ERROR_MESSAGE
 ) VALUES
-(1, 1, 1, 'user001@gmail.com', 4250),
-(1, 2, 2, 'user002@naver.com', 4250),
-(1, 3, 3, 'user011@naver.com', 4250),
-(1, 4, 4, 'user012@daum.net', 4250),
-(2, 5, 5, 'user003@daum.net', 2725),
-(2, 6, 6, 'user004@gmail.com', 2725),
-(2, 7, 7, 'user013@gmail.com', 2725),
-(2, 8, 8, 'user014@naver.com', 2725),
-(3, 9, 9, 'user005@naver.com', 1975),
-(3, 10, 10, 'user006@daum.net', 1975),
-(3, 11, 11, 'user015@daum.net', 1975),
-(3, 12, 12, 'user016@gmail.com', 1975),
-(4, 13, 13, 'user007@gmail.com', 3475),
-(4, 14, 14, 'user008@naver.com', 3475),
-(4, 15, 15, 'user017@naver.com', 3475),
-(4, 16, 16, 'user018@daum.net', 3475),
-(5, 17, 17, 'user009@daum.net', 7250),
-(5, 18, 18, 'user010@gmail.com', 7250),
-(5, 19, 19, 'user019@gmail.com', 7250),
-(5, 20, 20, 'user020@naver.com', 7250);
+-- DEPOSIT_ID=2: 1회 성공 (정상 환불)
+(2, 1, DATE_SUB(NOW(), INTERVAL 2 HOUR), 'SUCCESS', NULL, 4250, '파티 정상 종료', NULL, NULL),
+
+-- DEPOSIT_ID=3: 2회 만에 성공 (1차 실패 → 2차 성공)
+(3, 1, DATE_SUB(NOW(), INTERVAL 26 HOUR), 'FAILED', DATE_SUB(NOW(), INTERVAL 2 HOUR), 4250, '파티 정상 종료', 'ALREADY_CANCELED', '이미 취소된 결제입니다.'),
+(3, 2, DATE_SUB(NOW(), INTERVAL 2 HOUR), 'SUCCESS', NULL, 4250, '파티 정상 종료', NULL, NULL),
+
+-- DEPOSIT_ID=4: 3회 만에 성공 
+(4, 1, DATE_SUB(NOW(), INTERVAL 74 HOUR), 'FAILED', DATE_SUB(NOW(), INTERVAL 50 HOUR), 4250, '중도 탈퇴 (50% 환불)', 'CANCEL_AMOUNT_EXCEED', '취소 가능 금액을 초과했습니다.'),
+(4, 2, DATE_SUB(NOW(), INTERVAL 50 HOUR), 'FAILED', DATE_SUB(NOW(), INTERVAL 2 HOUR), 2125, '중도 탈퇴 (50% 환불)', 'PAYMENT_NOT_FOUND', '결제 정보를 찾을 수 없습니다.'),
+(4, 3, DATE_SUB(NOW(), INTERVAL 2 HOUR), 'SUCCESS', NULL, 2125, '중도 탈퇴 (50% 환불)', NULL, NULL),
+
+-- DEPOSIT_ID=5: 현재 재시도 대기 중 (PENDING)
+(5, 1, DATE_SUB(NOW(), INTERVAL 26 HOUR), 'FAILED', DATE_ADD(NOW(), INTERVAL 2 HOUR), 10900, '파티 정상 종료', 'TEMPORARY_ERROR', '일시적인 오류가 발생했습니다.'),
+
+-- DEPOSIT_ID=6: 4회 모두 실패 (최종 실패)
+(6, 1, DATE_SUB(NOW(), INTERVAL 170 HOUR), 'FAILED', DATE_SUB(NOW(), INTERVAL 146 HOUR), 2725, '파티장 탈퇴', 'INVALID_PAYMENT_KEY', '유효하지 않은 결제 키입니다.'),
+(6, 2, DATE_SUB(NOW(), INTERVAL 146 HOUR), 'FAILED', DATE_SUB(NOW(), INTERVAL 98 HOUR), 2725, '파티장 탈퇴', 'INVALID_PAYMENT_KEY', '유효하지 않은 결제 키입니다.'),
+(6, 3, DATE_SUB(NOW(), INTERVAL 98 HOUR), 'FAILED', DATE_SUB(NOW(), INTERVAL 26 HOUR), 2725, '파티장 탈퇴', 'INVALID_PAYMENT_KEY', '유효하지 않은 결제 키입니다.'),
+(6, 4, DATE_SUB(NOW(), INTERVAL 26 HOUR), 'FAILED', NULL, 2725, '파티장 탈퇴 (최종 실패)', 'INVALID_PAYMENT_KEY', '유효하지 않은 결제 키입니다.');
+
+-- ============================================
+-- 7-2. 정산 이체 재시도 이력
+-- ============================================
+
+-- SETTLEMENT_RETRY_HISTORY: 정산 이체 재시도 이력 (다양한 시나리오)
+INSERT INTO SETTLEMENT_RETRY_HISTORY (
+    SETTLEMENT_ID, PARTY_ID, PARTY_LEADER_ID, ACCOUNT_ID,
+    ATTEMPT_NUMBER, ATTEMPT_DATE, RETRY_REASON, RETRY_STATUS,
+    NEXT_RETRY_DATE, TRANSFER_AMOUNT,
+    ERROR_CODE, ERROR_MESSAGE, BANK_RSP_CODE, BANK_RSP_MESSAGE, BANK_TRAN_ID
+) VALUES
+-- SETTLEMENT_ID=1: 1회 성공 (정상 정산)
+(1, 1, 'user001@gmail.com', 1, 1, '2024-06-05 09:55:00', NULL, 'SUCCESS', NULL, 14450, NULL, NULL, '000', '정상처리', 'T202406050001'),
+
+-- SETTLEMENT_ID=2: 2회 만에 성공 (1차 실패 → 2차 성공)
+(2, 2, 'user003@daum.net', 3, 1, '2024-06-05 10:25:00', NULL, 'FAILED', '2024-06-05 12:25:00', 9265, 'A0003', '수취인 계좌 오류', '301', '수취계좌오류', NULL),
+(2, 2, 'user003@daum.net', 3, 2, '2024-06-05 10:30:00', '수취인 계좌 오류', 'SUCCESS', NULL, 9265, NULL, NULL, '000', '정상처리', 'T202406050002'),
+
+-- SETTLEMENT_ID=3: 3회 만에 성공 
+(3, 3, 'user005@naver.com', 5, 1, '2024-06-05 10:55:00', NULL, 'FAILED', '2024-06-05 12:55:00', 6715, 'A0005', '출금 한도 초과', '512', '출금한도초과', NULL),
+(3, 3, 'user005@naver.com', 5, 2, '2024-06-05 12:55:00', '출금 한도 초과', 'FAILED', '2024-06-05 14:55:00', 6715, 'A0005', '출금 한도 초과', '512', '출금한도초과', NULL),
+(3, 3, 'user005@naver.com', 5, 3, '2024-06-05 11:00:00', '출금 한도 초과', 'SUCCESS', NULL, 6715, NULL, NULL, '000', '정상처리', 'T202406050003'),
+
+-- SETTLEMENT_ID=4: 현재 재시도 대기 중 (PENDING)
+(4, 4, 'user007@gmail.com', 7, 1, DATE_SUB(NOW(), INTERVAL 26 HOUR), NULL, 'FAILED', DATE_ADD(NOW(), INTERVAL 2 HOUR), 11815, 'A0007', '계좌 동결 상태', '560', '계좌동결상태', NULL),
+
+-- SETTLEMENT_ID=5: 4회 모두 실패 (최종 실패 - 수동 처리 필요)
+(5, 5, 'user009@daum.net', 9, 1, '2024-07-05 11:25:00', NULL, 'FAILED', '2024-07-05 13:25:00', 24650, 'A0001', '계좌번호 없음', '115', '해당계좌없음', NULL),
+(5, 5, 'user009@daum.net', 9, 2, '2024-07-05 13:25:00', '계좌번호 없음', 'FAILED', '2024-07-05 15:25:00', 24650, 'A0001', '계좌번호 없음', '115', '해당계좌없음', NULL),
+(5, 5, 'user009@daum.net', 9, 3, '2024-07-05 15:25:00', '계좌번호 없음', 'FAILED', '2024-07-05 17:25:00', 24650, 'A0001', '계좌번호 없음', '115', '해당계좌없음', NULL),
+(5, 5, 'user009@daum.net', 9, 4, '2024-07-05 17:25:00', '계좌번호 없음 (최종 실패)', 'FAILED', NULL, 24650, 'A0001', '계좌번호 없음 - 수동 처리 필요', '115', '해당계좌없음', NULL);
 
 -- ============================================
 -- 8. 게시판 데이터
