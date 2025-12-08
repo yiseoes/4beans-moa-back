@@ -4,8 +4,17 @@ import com.moa.dto.community.request.*;
 import com.moa.dto.community.response.*;
 import com.moa.service.community.CommunityService;
 import lombok.RequiredArgsConstructor;
+import org.springframework.core.io.Resource;
+import org.springframework.core.io.UrlResource;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.multipart.MultipartFile;
+
+import java.net.MalformedURLException;
+import java.nio.file.Path;
+import java.nio.file.Paths;
 
 @RestController
 @RequestMapping("/api/community")
@@ -39,12 +48,6 @@ public class CommunityRestController {
         communityService.updateNotice(communityId, request);
         return ResponseEntity.ok().build();
     }
-    
-//    @DeleteMapping("/notice/{communityId}")
-//    public ResponseEntity<Void> deleteNotice(@PathVariable Integer communityId) {
-//        communityService.deleteNotice(communityId);
-//        return ResponseEntity.ok().build();
-//    }
     
     @GetMapping("/notice/search")
     public ResponseEntity<PageResponse<NoticeResponse>> searchNotice(
@@ -80,12 +83,6 @@ public class CommunityRestController {
         return ResponseEntity.ok().build();
     }
     
-//    @DeleteMapping("/faq/{communityId}")
-//    public ResponseEntity<Void> deleteFaq(@PathVariable Integer communityId) {
-//        communityService.deleteFaq(communityId);
-//        return ResponseEntity.ok().build();
-//    }
-    
     @GetMapping("/faq/search")
     public ResponseEntity<PageResponse<FaqResponse>> searchFaq(
             @RequestParam String keyword,
@@ -115,16 +112,15 @@ public class CommunityRestController {
     }
     
     @PostMapping("/inquiry")
-    public ResponseEntity<Void> addInquiry(@RequestBody InquiryRequest request) {
-        communityService.addInquiry(request);
+    public ResponseEntity<Void> addInquiry(
+            @RequestParam String userId,
+            @RequestParam Integer communityCodeId,
+            @RequestParam String title,
+            @RequestParam String content,
+            @RequestParam(required = false) MultipartFile file) {
+        communityService.addInquiry(userId, communityCodeId, title, content, file);
         return ResponseEntity.ok().build();
     }
-    
-//    @DeleteMapping("/inquiry/{communityId}")
-//    public ResponseEntity<Void> deleteInquiry(@PathVariable Integer communityId) {
-//        communityService.deleteInquiry(communityId);
-//        return ResponseEntity.ok().build();
-//    }
     
     @PostMapping("/inquiry/answer")
     public ResponseEntity<Void> addAnswer(@RequestBody AnswerRequest request) {
@@ -136,5 +132,24 @@ public class CommunityRestController {
     public ResponseEntity<Void> updateAnswer(@RequestBody AnswerRequest request) {
         communityService.updateAnswer(request);
         return ResponseEntity.ok().build();
+    }
+    
+    @GetMapping("/inquiry/image/{fileUuid}")
+    public ResponseEntity<Resource> getInquiryImage(@PathVariable String fileUuid) {
+        try {
+            Resource resource = communityService.getInquiryImage(fileUuid);
+            
+            String contentType = "image/jpeg";
+            if (fileUuid.toLowerCase().endsWith(".png")) {
+                contentType = "image/png";
+            }
+            
+            return ResponseEntity.ok()
+                    .contentType(MediaType.parseMediaType(contentType))
+                    .header(HttpHeaders.CONTENT_DISPOSITION, "inline; filename=\"" + fileUuid + "\"")
+                    .body(resource);
+        } catch (Exception e) {
+            return ResponseEntity.notFound().build();
+        }
     }
 }

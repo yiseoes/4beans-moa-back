@@ -2,6 +2,8 @@ package com.moa.service.community;
 
 import com.moa.dto.community.request.*;
 import com.moa.dto.community.response.*;
+import org.springframework.core.io.Resource;
+import org.springframework.web.multipart.MultipartFile;
 
 public interface CommunityService {
     
@@ -13,8 +15,6 @@ public interface CommunityService {
     
     void updateNotice(Integer communityId, NoticeRequest request);
     
-    //void deleteNotice(Integer communityId);
-    
     PageResponse<NoticeResponse> searchNotice(String keyword, int page, int size);
     
     PageResponse<FaqResponse> getFaqList(int page, int size);
@@ -25,8 +25,6 @@ public interface CommunityService {
     
     void updateFaq(Integer communityId, FaqRequest request);
     
-    //void deleteFaq(Integer communityId);
-    
     PageResponse<FaqResponse> searchFaq(String keyword, int page, int size);
     
     PageResponse<InquiryResponse> getMyInquiryList(String userId, int page, int size);
@@ -35,11 +33,11 @@ public interface CommunityService {
     
     InquiryResponse getInquiry(Integer communityId);
     
-    void addInquiry(InquiryRequest request);
-    
-    //void deleteInquiry(Integer communityId);
+    void addInquiry(String userId, Integer communityCodeId, String title, String content, MultipartFile file);
     
     void addAnswer(AnswerRequest request);
     
     void updateAnswer(AnswerRequest request);
+    
+    Resource getInquiryImage(String fileUuid);
 }
