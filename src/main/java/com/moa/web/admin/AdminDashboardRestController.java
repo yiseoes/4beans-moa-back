@@ -5,8 +5,8 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 import com.moa.common.exception.ApiResponse;
-import com.moa.dto.admin.DashboardStatsResponse;
-import com.moa.service.admin.DashboardService;
+import com.moa.dto.admin.response.DashboardStatsResponse;
+import com.moa.service.admin.AdminDashboardService;
 
 import lombok.RequiredArgsConstructor;
 
@@ -15,10 +15,10 @@ import lombok.RequiredArgsConstructor;
 @RequiredArgsConstructor
 public class AdminDashboardRestController {
 
-    private final DashboardService dashboardService;
+    private final AdminDashboardService adminDashboardService;
 
     @GetMapping("/stats")
     public ApiResponse<DashboardStatsResponse> getStats() {
-        return ApiResponse.success(dashboardService.getStats());
+        return ApiResponse.success(adminDashboardService.getDashboardStats());
     }
 }
