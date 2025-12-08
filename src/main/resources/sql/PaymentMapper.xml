@@ -77,6 +77,14 @@
         <result property="productImage" column="PRODUCT_IMAGE"/>
         <result property="partyLeaderNickname" column="PARTY_LEADER_NICKNAME"/>
         <result property="userNickname" column="USER_NICKNAME"/>
+
+        <!-- 재시도 정보 -->
+        <result property="retryStatus" column="RETRY_STATUS"/>
+        <result property="attemptNumber" column="ATTEMPT_NUMBER"/>
+        <result property="nextRetryDate" column="NEXT_RETRY_DATE"/>
+        <result property="retryReason" column="RETRY_REASON"/>
+        <result property="errorMessage" column="ERROR_MESSAGE"/>
+        <result property="canRetry" column="CAN_RETRY"/>
     </resultMap>
 
     <!-- ====================================== -->
@@ -152,12 +160,37 @@
             LEADER.NICKNAME AS PARTY_LEADER_NICKNAME,
 
             -- 사용자 정보
-            U.NICKNAME AS USER_NICKNAME
+            U.NICKNAME AS USER_NICKNAME,
+
+            -- 재시도 정보 (가장 최근 시도만)
+            RETRY.RETRY_STATUS,
+            RETRY.ATTEMPT_NUMBER,
+            RETRY.NEXT_RETRY_DATE,
+            RETRY.RETRY_REASON,
+            RETRY.ERROR_MESSAGE,
+
+            -- 재시도 가능 여부 계산 (FAILED 상태이고 시도 횟수가 4회 미만)
+            CASE
+                WHEN PAY.PAYMENT_STATUS = 'FAILED' AND (RETRY.ATTEMPT_NUMBER IS NULL OR RETRY.ATTEMPT_NUMBER &lt; 4)
+                THEN TRUE
+                ELSE FALSE
+            END AS CAN_RETRY
         FROM PAYMENT PAY
                  INNER JOIN PARTY P ON PAY.PARTY_ID = P.PARTY_ID
                  INNER JOIN USERS LEADER ON P.PARTY_LEADER_ID = LEADER.USER_ID
                  INNER JOIN PRODUCT PROD ON P.PRODUCT_ID = PROD.PRODUCT_ID
                  INNER JOIN USERS U ON PAY.USER_ID = U.USER_ID
+                 LEFT JOIN (
+            -- 각 결제의 가장 최근 재시도 기록만 가져오기
+            SELECT PRT.*
+            FROM PAYMENT_RETRY_HISTORY PRT
+                     INNER JOIN (
+                SELECT PAYMENT_ID, MAX(ATTEMPT_NUMBER) as MAX_ATTEMPT
+                FROM PAYMENT_RETRY_HISTORY
+                GROUP BY PAYMENT_ID
+            ) LATEST ON PRT.PAYMENT_ID = LATEST.PAYMENT_ID
+                AND PRT.ATTEMPT_NUMBER = LATEST.MAX_ATTEMPT
+        ) RETRY ON PAY.PAYMENT_ID = RETRY.PAYMENT_ID
         WHERE PAY.PAYMENT_ID = #{paymentId}
     </select>
 
@@ -274,5 +307,37 @@
         SET PAYMENT_STATUS = #{status}
         WHERE PAYMENT_ID = #{paymentId}
     </update>
+
+    <!-- 정산 ID 업데이트 (비정규화 - SETTLEMENT_DETAIL 테이블 제거로 인해 추가) -->
+    <update id="updateSettlementId">
+        UPDATE PAYMENT
+        SET SETTLEMENT_ID = #{settlementId}
+        WHERE PAYMENT_ID = #{paymentId}
+    </update>
+
+    <!-- 정산 ID로 결제 내역 조회 (정산 상세 조회용) -->
+    <select id="findBySettlementId" parameterType="int" resultMap="PaymentResponseResultMap">
+        SELECT
+            PAY.PAYMENT_ID,
+            PAY.PARTY_ID,
+            PAY.USER_ID,
+            PAY.PARTY_MEMBER_ID,
+            PAY.PAYMENT_TYPE,
+            PAY.PAYMENT_AMOUNT,
+            PAY.PAYMENT_STATUS,
+            PAY.PAYMENT_METHOD,
+            PAY.PAYMENT_DATE,
+            PAY.TARGET_MONTH,
+            PAY.CARD_NUMBER,
+            PAY.CARD_COMPANY,
+            PROD.PRODUCT_NAME,
+            LEADER.NICKNAME AS PARTY_LEADER_NICKNAME
+        FROM PAYMENT PAY
+        INNER JOIN PARTY P ON PAY.PARTY_ID = P.PARTY_ID
+        INNER JOIN USERS LEADER ON P.PARTY_LEADER_ID = LEADER.USER_ID
+        INNER JOIN PRODUCT PROD ON P.PRODUCT_ID = PROD.PRODUCT_ID
+        WHERE PAY.SETTLEMENT_ID = #{settlementId}
+        ORDER BY PAY.PAYMENT_DATE ASC
+    </select>
 
 </mapper>

@@ -63,6 +63,12 @@ class PartyServiceImplTest {
 	@Mock
 	private PaymentService paymentService;
 
+	@Mock
+	private com.moa.service.push.PushService pushService;
+
+	@Mock
+	private com.moa.service.payment.TossPaymentService tossPaymentService;
+
 	@InjectMocks
 	private PartyServiceImpl partyService;
 
@@ -235,7 +241,9 @@ class PartyServiceImplTest {
 		// given
 		Integer partyId = 1;
 		String joinUserId = "join-user-456";
-		PaymentRequest paymentRequest = new PaymentRequest(); // Mock PaymentRequest if needed
+		PaymentRequest paymentRequest = new PaymentRequest();
+		paymentRequest.setTossPaymentKey("test-payment-key");
+		paymentRequest.setOrderId("test-order-id");
 
 		PartyMemberResponse expectedResponse = PartyMemberResponse.builder()
 				.partyMemberId(1)
@@ -257,10 +265,13 @@ class PartyServiceImplTest {
 		given(partyMemberDao.findByPartyMemberId(1))
 				.willReturn(Optional.of(expectedResponse));
 
-		// Mock deposit and payment service calls
-		given(depositService.createDeposit(anyInt(), anyInt(), anyString(), anyInt(), any(PaymentRequest.class)))
+		// Mock Toss Payment confirmation (새로 추가)
+		willDoNothing().given(tossPaymentService).confirmPayment(anyString(), anyString(), anyInt());
+
+		// Mock deposit and payment service calls (WithoutConfirm 메서드 사용)
+		given(depositService.createDepositWithoutConfirm(anyInt(), anyInt(), anyString(), anyInt(), any(PaymentRequest.class)))
 				.willReturn(com.moa.domain.Deposit.builder().depositId(100).build());
-		given(paymentService.createInitialPayment(anyInt(), anyInt(), anyString(), anyInt(), anyString(),
+		given(paymentService.createInitialPaymentWithoutConfirm(anyInt(), anyInt(), anyString(), anyInt(), anyString(),
 				any(PaymentRequest.class)))
 				.willReturn(com.moa.domain.Payment.builder().paymentId(200).build());
 
@@ -274,6 +285,7 @@ class PartyServiceImplTest {
 		assertThat(result.getUserId()).isEqualTo(joinUserId);
 		assertThat(result.getMemberRole()).isEqualTo("MEMBER");
 
+		then(tossPaymentService).should(times(1)).confirmPayment(anyString(), anyString(), anyInt());
 		then(partyDao).should(times(1)).incrementCurrentMembers(partyId);
 	}
 
@@ -353,10 +365,24 @@ class PartyServiceImplTest {
 		Integer partyId = 1;
 		String leaveUserId = "member-user-789";
 
-		// when & then
-		assertThatThrownBy(() -> partyService.leaveParty(partyId, leaveUserId))
-				.isInstanceOf(BusinessException.class)
-				.hasFieldOrPropertyWithValue("errorCode", ErrorCode.FEATURE_NOT_AVAILABLE);
+		PartyMember member = PartyMember.builder()
+				.partyMemberId(2)
+				.partyId(partyId)
+				.userId(leaveUserId)
+				.memberStatus(MemberStatus.ACTIVE)
+				.depositId(100)
+				.build();
+
+		given(partyDao.findById(partyId)).willReturn(Optional.of(testParty));
+		given(partyMemberDao.findByPartyIdAndUserId(partyId, leaveUserId)).willReturn(Optional.of(member));
+		given(partyDao.decrementCurrentMembers(partyId)).willReturn(1);
+
+		// when
+		partyService.leaveParty(partyId, leaveUserId);
+
+		// then
+		then(partyMemberDao).should(times(1)).updatePartyMember(any(PartyMember.class));
+		then(partyDao).should(times(1)).decrementCurrentMembers(partyId);
 	}
 
 	@Test
@@ -365,9 +391,12 @@ class PartyServiceImplTest {
 		// given
 		Integer partyId = 1;
 		String leaderUserId = testUserId; // 방장
+
+		given(partyDao.findById(partyId)).willReturn(Optional.of(testParty));
+
 		// when & then
 		assertThatThrownBy(() -> partyService.leaveParty(partyId, leaderUserId))
 				.isInstanceOf(BusinessException.class)
-				.hasFieldOrPropertyWithValue("errorCode", ErrorCode.FEATURE_NOT_AVAILABLE);
+				.hasFieldOrPropertyWithValue("errorCode", ErrorCode.LEADER_CANNOT_LEAVE);
 	}
 }

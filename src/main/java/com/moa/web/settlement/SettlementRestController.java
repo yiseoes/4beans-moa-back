@@ -12,7 +12,7 @@ import org.springframework.web.bind.annotation.RestController;
 import com.moa.common.exception.ApiResponse;
 import com.moa.common.exception.BusinessException;
 import com.moa.common.exception.ErrorCode;
-import com.moa.dto.settlement.response.SettlementDetailResponse;
+import com.moa.dto.payment.response.PaymentResponse;
 import com.moa.dto.settlement.response.SettlementResponse;
 import com.moa.service.settlement.SettlementService;
 
@@ -90,9 +90,9 @@ public class SettlementRestController {
      * @return 정산 상세 목록 (파티원별 결제 내역)
      */
     @GetMapping("/{settlementId}/details")
-    public ApiResponse<List<SettlementDetailResponse>> getSettlementDetails(
+    public ApiResponse<List<PaymentResponse>> getSettlementDetails(
             @PathVariable Integer settlementId) {
-        List<SettlementDetailResponse> response = settlementService.getSettlementDetails(settlementId);
+        List<PaymentResponse> response = settlementService.getSettlementDetails(settlementId);
         return ApiResponse.success(response);
     }
 }

@@ -11,6 +11,8 @@
         <result property="bankName" column="BANK_NAME"/>
         <result property="accountNumber" column="ACCOUNT_NUMBER"/>
         <result property="accountHolder" column="ACCOUNT_HOLDER"/>
+        <result property="fintechUseNum" column="FINTECH_USE_NUM"/>
+        <result property="status" column="STATUS"/>
         <result property="isVerified" column="IS_VERIFIED"/>
         <result property="regDate" column="REG_DATE"/>
         <result property="verifyDate" column="VERIFY_DATE"/>
@@ -37,6 +39,33 @@
 
     <select id="findById" resultMap="AccountResultMap">
         SELECT * FROM ACCOUNT WHERE ACCOUNT_ID = #{accountId}
+    </select>
+
+    <!-- 오픈뱅킹 관련 쿼리 -->
+    
+    <!-- 핀테크이용번호 업데이트 -->
+    <update id="updateFintechUseNum">
+        UPDATE ACCOUNT
+        SET FINTECH_USE_NUM = #{fintechUseNum}
+        WHERE ACCOUNT_ID = #{accountId}
+    </update>
+    
+    <!-- 계좌 상태 업데이트 -->
+    <update id="updateStatus">
+        UPDATE ACCOUNT
+        SET STATUS = #{status}
+        WHERE ACCOUNT_ID = #{accountId}
+    </update>
+    
+    <!-- 핀테크이용번호로 계좌 조회 -->
+    <select id="findByFintechUseNum" resultMap="AccountResultMap">
+        SELECT * FROM ACCOUNT WHERE FINTECH_USE_NUM = #{fintechUseNum}
+    </select>
+    
+    <!-- 활성 계좌만 조회 -->
+    <select id="findActiveByUserId" resultMap="AccountResultMap">
+        SELECT * FROM ACCOUNT 
+        WHERE USER_ID = #{userId} AND (STATUS = 'ACTIVE' OR STATUS IS NULL)
     </select>
 
 </mapper>
