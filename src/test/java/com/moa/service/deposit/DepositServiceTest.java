@@ -36,6 +36,12 @@ class DepositServiceTest {
         @Mock
         private org.springframework.context.ApplicationEventPublisher eventPublisher;
 
+        @Mock
+        private com.moa.dao.party.PartyDao partyDao;
+
+        @Mock
+        private com.moa.dao.refund.RefundRetryHistoryDao refundRetryHistoryDao;
+
         @Test
         @DisplayName("보증금 환불 성공 테스트")
         void refundDeposit_Success() {

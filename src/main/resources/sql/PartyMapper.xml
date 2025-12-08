@@ -353,4 +353,21 @@
 		  )
 	</select>
 
+	<!-- 종료일이 지난 활성 파티 조회 (스케줄러용) -->
+	<select id="findExpiredActiveParties" resultMap="PartyResultMap">
+		SELECT *
+		FROM PARTY
+		WHERE PARTY_STATUS IN ('ACTIVE', 'RECRUITING')
+		  AND END_DATE IS NOT NULL
+		  AND END_DATE &lt; #{now}
+	</select>
+
+	<!-- 결제 타임아웃된 파티 조회 (PENDING_PAYMENT 상태이고 생성 시간이 지정된 시간 이전) -->
+	<select id="findExpiredPendingPaymentParties" resultMap="PartyResultMap">
+		SELECT *
+		FROM PARTY
+		WHERE PARTY_STATUS = #{status}
+		  AND REG_DATE &lt; #{timeoutThreshold}
+	</select>
+
 </mapper>
