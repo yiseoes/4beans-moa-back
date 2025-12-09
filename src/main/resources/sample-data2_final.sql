@@ -189,8 +189,18 @@ INSERT INTO USERS (
     LOGIN_FAIL_COUNT, UNLOCK_SCHEDULED_AT,
     DELETE_DATE, DELETE_TYPE, DELETE_DETAIL, AGREE_MARKETING
 ) VALUES
+-- 슈퍼관리자 (BCrypt: 1!)
 ('admin@admin.com', '$2a$10$r4WvD.fkTss4amaWwy7/dOV1SmwrMM.GocYPXsfgTL4td2mqrHZP6', '슈퍼관리자', '01099999999', '/img/profile/super_admin.png', 'ADMIN', 'ACTIVE', '2024-01-01 00:00:00', 'CI_SUPER_ADMIN', '2024-01-01 00:00:00', '2024-12-03 09:00:00', 0, NULL, NULL, NULL, NULL, 1),
+
+-- 일반관리자 (BCrypt: 1!)
 ('admin@moa.com', '$2a$10$r4WvD.fkTss4amaWwy7/dOV1SmwrMM.GocYPXsfgTL4td2mqrHZP6', '관리자', '01000000000', '/img/profile/admin.png', 'ADMIN', 'ACTIVE', '2024-01-01 00:00:00', 'CI_ADMIN_001', '2024-01-01 00:00:00', '2024-12-03 08:00:00', 0, NULL, NULL, NULL, NULL, 1),
+
+-- 테스트계정 (BCrypt: 1!)
+('admintest', '$2a$10$r4WvD.fkTss4amaWwy7/dOV1SmwrMM.GocYPXsfgTL4td2mqrHZP6', '테스트관리자1', '01000000000', NULL, 'ADMIN', 'ACTIVE', '2024-01-01 00:00:00', 'CI_ADMIN_011', '2024-01-01 00:00:00', '2024-12-03 08:00:00', 0, NULL, NULL, NULL, NULL, 1),
+
+('usertest1', '$2a$10$r4WvD.fkTss4amaWwy7/dOV1SmwrMM.GocYPXsfgTL4td2mqrHZP6', '테스트사용자1', '01010010001', NULL, 'USER', 'ACTIVE', '2024-03-01 10:30:00', 'CI_USER_1', '2024-03-01 10:30:00', '2024-11-28 14:20:00', 0, NULL, NULL, NULL, NULL, 1),
+('usertest2', '$2a$10$r4WvD.fkTss4amaWwy7/dOV1SmwrMM.GocYPXsfgTL4td2mqrHZP6', '테스트사용자2', '01010010001', NULL, 'USER', 'ACTIVE', '2024-03-01 10:30:00', 'CI_USER_2', '2024-03-01 10:30:00', '2024-11-28 14:20:00', 0, NULL, NULL, NULL, NULL, 1),
+-- 일반회원 20명 (BCrypt: user1234!)
 ('user001@gmail.com', '$2a$10$r4WvD.fkTss4amaWwy7/dOV1SmwrMM.GocYPXsfgTL4td2mqrHZP6', '사용자001', '01010010001', NULL, 'USER', 'ACTIVE', '2024-03-01 10:30:00', 'CI_USER_001', '2024-03-01 10:30:00', '2024-11-28 14:20:00', 0, NULL, NULL, NULL, NULL, 1),
 ('user002@naver.com', '$2a$10$r4WvD.fkTss4amaWwy7/dOV1SmwrMM.GocYPXsfgTL4td2mqrHZP6', '사용자002', '01010010002', NULL, 'USER', 'ACTIVE', '2024-03-05 11:00:00', 'CI_USER_002', '2024-03-05 11:00:00', '2024-11-29 09:15:00', 0, NULL, NULL, NULL, NULL, 0),
 ('user003@daum.net', '$2a$10$r4WvD.fkTss4amaWwy7/dOV1SmwrMM.GocYPXsfgTL4td2mqrHZP6', '사용자003', '01010010003', NULL, 'USER', 'ACTIVE', '2024-03-10 14:20:00', 'CI_USER_003', '2024-03-10 14:20:00', '2024-11-30 16:45:00', 0, NULL, NULL, NULL, NULL, 1),
