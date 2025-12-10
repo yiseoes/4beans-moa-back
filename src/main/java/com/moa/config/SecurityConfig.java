@@ -1,6 +1,5 @@
 package com.moa.config;
 
-import java.util.Arrays;
 import java.util.List;
 
 import org.springframework.beans.factory.annotation.Value;
@@ -80,6 +79,8 @@ public class SecurityConfig {
 					"/api/users/find-id",
 					"/api/users/pass/**",
 					"/api/users/resetPwd/**",
+					"/api/users/exists-by-phone", // --> 충돌난다면 이걸 활성화해야함
+					"/api/oauth/connect-by-phone", // --> 충돌난다면 이걸 활성화해야함
 					"/swagger-ui/**",
 					"/v3/api-docs/**",
 					"/uploads/**"
