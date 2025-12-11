@@ -3,6 +3,7 @@ package com.moa.service.payment.impl;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Map;
 
 import org.springframework.context.annotation.Lazy;
 import org.springframework.stereotype.Service;
@@ -10,13 +11,20 @@ import org.springframework.transaction.annotation.Transactional;
 
 import com.moa.common.exception.BusinessException;
 import com.moa.common.exception.ErrorCode;
+import com.moa.dao.party.PartyDao;
+import com.moa.dao.partymember.PartyMemberDao;
 import com.moa.dao.payment.PaymentDao;
 import com.moa.dao.payment.PaymentRetryDao;
+import com.moa.domain.Party;
+import com.moa.domain.PartyMember;
 import com.moa.domain.Payment;
 import com.moa.domain.PaymentRetryHistory;
 import com.moa.domain.enums.PaymentStatus;
+import com.moa.domain.enums.PushCodeType;
+import com.moa.dto.push.request.TemplatePushRequest;
 import com.moa.service.payment.PaymentRetryService;
 import com.moa.service.payment.PaymentService;
+import com.moa.service.push.PushService;
 
 import lombok.extern.slf4j.Slf4j;
 
@@ -35,6 +43,12 @@ public class PaymentRetryServiceImpl implements PaymentRetryService {
     private final PaymentRetryDao retryDao;
     private final PaymentDao paymentDao;
     private final PaymentService paymentService;
+    
+    // ========== 푸시알림 추가 ==========
+    private final PushService pushService;
+    private final PartyDao partyDao;
+    private final PartyMemberDao partyMemberDao;
+    // ========== 푸시알림 추가 끝 ==========
 
     /**
      * Constructor with @Lazy injection for PaymentService to break circular dependency
@@ -43,10 +57,21 @@ public class PaymentRetryServiceImpl implements PaymentRetryService {
     public PaymentRetryServiceImpl(
             PaymentRetryDao retryDao,
             PaymentDao paymentDao,
-            @Lazy PaymentService paymentService) {
+            @Lazy PaymentService paymentService,
+            // ========== 푸시알림 추가 ==========
+            PushService pushService,
+            PartyDao partyDao,
+            PartyMemberDao partyMemberDao
+            // ========== 푸시알림 추가 끝 ==========
+    ) {
         this.retryDao = retryDao;
         this.paymentDao = paymentDao;
         this.paymentService = paymentService;
+        // ========== 푸시알림 추가 ==========
+        this.pushService = pushService;
+        this.partyDao = partyDao;
+        this.partyMemberDao = partyMemberDao;
+        // ========== 푸시알림 추가 끝 ==========
     }
 
     @Override

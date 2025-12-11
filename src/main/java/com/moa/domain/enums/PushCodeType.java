@@ -7,24 +7,44 @@ import lombok.RequiredArgsConstructor;
 @RequiredArgsConstructor
 public enum PushCodeType {
     
-    // 커뮤니티 알림
-    INQUIRY_ANSWER("INQUIRY_ANSWER", "COMMUNITY"),        // 문의 답변 완료
+    // ===== 커뮤니티 알림 (1개) =====
+    INQUIRY_ANSWER("INQUIRY_ANSWER", "COMMUNITY"),
     
-    // 결제 알림
-    PAYMENT_SUCCESS("PAYMENT_SUCCESS", "PAYMENT"),        // 결제 성공
-    PAYMENT_FAIL("PAYMENT_FAIL", "PAYMENT"),              // 결제 실패
+    // ===== 파티 알림 (6개) =====
+    PARTY_JOIN("PARTY_JOIN", "PARTY"),
+    PARTY_WITHDRAW("PARTY_WITHDRAW", "PARTY"),
+    PARTY_START("PARTY_START", "PARTY"),
+    PARTY_CLOSED("PARTY_CLOSED", "PARTY"),
+    PARTY_MEMBER_JOIN("PARTY_MEMBER_JOIN", "PARTY"),
+    PARTY_MEMBER_WITHDRAW("PARTY_MEMBER_WITHDRAW", "PARTY"),
     
-    // 파티 알림
-    PARTY_JOIN("PARTY_JOIN", "PARTY"),                    // 파티 가입 완료
-    PARTY_START("PARTY_START", "PARTY"),                  // 파티 시작
-
+    // ===== 결제 알림 (10개) =====
+    PAY_UPCOMING("PAY_UPCOMING", "PAYMENT"),
+    PAY_SUCCESS("PAY_SUCCESS", "PAYMENT"),
+    PAY_FAILED_RETRY("PAY_FAILED_RETRY", "PAYMENT"),
+    PAY_FAILED_BALANCE("PAY_FAILED_BALANCE", "PAYMENT"),
+    PAY_FAILED_LIMIT("PAY_FAILED_LIMIT", "PAYMENT"),
+    PAY_FAILED_CARD("PAY_FAILED_CARD", "PAYMENT"),
+    PAY_FINAL_FAILED("PAY_FINAL_FAILED", "PAYMENT"),
+    PAY_MEMBER_FAILED_LEADER("PAY_MEMBER_FAILED_LEADER", "PAYMENT"),
+    PAY_RETRY_SUCCESS("PAY_RETRY_SUCCESS", "PAYMENT"),
+    PAY_TIMEOUT("PAY_TIMEOUT", "PAYMENT"),
     
-    // 정산 알림
-    SETTLEMENT_MONTHLY("SETTLEMENT_MONTHLY", "SETTLEMENT"), // 월간 정산 완료
+    // ===== 보증금 알림 (3개) =====
+    DEPOSIT_REFUNDED("DEPOSIT_REFUNDED", "DEPOSIT"),
+    DEPOSIT_FORFEITED("DEPOSIT_FORFEITED", "DEPOSIT"),
+    REFUND_SUCCESS("REFUND_SUCCESS", "DEPOSIT"),
     
-    // 보증금 알림
-    DEPOSIT_PAID("DEPOSIT_PAID", "DEPOSIT"),              // 보증금 납부 완료
-    DEPOSIT_REFUND("DEPOSIT_REFUND", "DEPOSIT");          // 보증금 환불 완료
+    // ===== 정산 알림 (3개) =====
+    SETTLE_COMPLETED("SETTLE_COMPLETED", "SETTLEMENT"),
+    SETTLE_FAILED("SETTLE_FAILED", "SETTLEMENT"),
+    ACCOUNT_REQUIRED("ACCOUNT_REQUIRED", "SETTLEMENT"),
+    
+    // ===== 오픈뱅킹 알림 (4개) =====
+    VERIFY_REQUESTED("VERIFY_REQUESTED", "OPENBANKING"),
+    ACCOUNT_VERIFIED("ACCOUNT_VERIFIED", "OPENBANKING"),
+    VERIFY_EXPIRED("VERIFY_EXPIRED", "OPENBANKING"),
+    VERIFY_EXCEEDED("VERIFY_EXCEEDED", "OPENBANKING");
     
     private final String code;
     private final String moduleType;

@@ -2,6 +2,7 @@ package com.moa.service.deposit.impl;
 
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Map;
 
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
@@ -12,14 +13,18 @@ import com.moa.common.exception.BusinessException;
 import com.moa.common.exception.ErrorCode;
 import com.moa.dao.deposit.DepositDao;
 import com.moa.dao.party.PartyDao;
+import com.moa.dao.product.ProductDao;
 import com.moa.domain.Deposit;
 import com.moa.domain.Party;
+import com.moa.domain.Product;
 import com.moa.domain.enums.DepositStatus;
+import com.moa.domain.enums.PushCodeType;
 import com.moa.dto.deposit.response.DepositResponse;
 import com.moa.dto.payment.request.PaymentRequest;
+import com.moa.dto.push.request.TemplatePushRequest;
 import com.moa.service.deposit.DepositService;
 import com.moa.service.payment.TossPaymentService;
-
+import com.moa.service.push.PushService;
 import com.moa.service.refund.RefundRetryService;
 
 import lombok.RequiredArgsConstructor;
@@ -48,6 +53,11 @@ public class DepositServiceImpl implements DepositService {
     private final ApplicationEventPublisher eventPublisher;
     private final com.moa.dao.refund.RefundRetryHistoryDao refundRetryHistoryDao;
     private final RefundRetryService refundRetryService;
+    
+    // ========== 푸시알림 추가 ==========
+    private final PushService pushService;
+    private final ProductDao productDao;
+    // ========== 푸시알림 추가 끝 ==========
 
     @Override
     public Deposit createDeposit(
@@ -218,6 +228,10 @@ public class DepositServiceImpl implements DepositService {
                 deposit.getRefundAmount(),
                 deposit.getUserId()));
 
+        // ========== 푸시알림 추가: 보증금 환불 완료 ==========
+        sendDepositRefundedPush(deposit);
+        // ========== 푸시알림 추가 끝 ==========
+
         log.info("보증금 환불 완료: depositId={}, amount={}", depositId, deposit.getRefundAmount());
     }
 
@@ -272,6 +286,91 @@ public class DepositServiceImpl implements DepositService {
 
         depositDao.updateDeposit(deposit);
 
-        // 몰수 이벤트는 발행하지 않음 (정산에서 처리)
+        // ========== 푸시알림 추가: 보증금 몰수 ==========
+        sendDepositForfeitedPush(deposit);
+        // ========== 푸시알림 추가 끝 ==========
     }
+
+    // ============================================
+    // 푸시알림 추가: Private 메서드들
+    // ============================================
+
+    /**
+     * 푸시알림 추가: 상품명 조회 헬퍼 메서드
+     */
+    private String getProductName(Integer productId) {
+        if (productId == null) return "OTT 서비스";
+        
+        try {
+            Product product = productDao.getProduct(productId);
+            return (product != null && product.getProductName() != null) 
+                ? product.getProductName() : "OTT 서비스";
+        } catch (Exception e) {
+            log.warn("상품 조회 실패: productId={}", productId);
+            return "OTT 서비스";
+        }
+    }
+
+    /**
+     * 푸시알림 추가: 보증금 환불 완료 알림
+     */
+    private void sendDepositRefundedPush(Deposit deposit) {
+        try {
+            Party party = partyDao.findById(deposit.getPartyId()).orElse(null);
+            if (party == null) return;
+
+            String productName = getProductName(party.getProductId());
+
+            Map<String, String> params = Map.of(
+                "productName", productName,
+                "amount", String.valueOf(deposit.getRefundAmount())
+            );
+
+            TemplatePushRequest pushRequest = TemplatePushRequest.builder()
+                .receiverId(deposit.getUserId())
+                .pushCode(PushCodeType.DEPOSIT_REFUNDED.getCode())
+                .params(params)
+                .moduleId(String.valueOf(deposit.getDepositId()))
+                .moduleType(PushCodeType.DEPOSIT_REFUNDED.getModuleType())
+                .build();
+
+            pushService.addTemplatePush(pushRequest);
+            log.info("푸시알림 발송 완료: DEPOSIT_REFUNDED -> userId={}", deposit.getUserId());
+
+        } catch (Exception e) {
+            log.error("푸시알림 발송 실패: depositId={}, error={}", deposit.getDepositId(), e.getMessage());
+        }
+    }
+
+    /**
+     * 푸시알림 추가: 보증금 몰수 알림
+     */
+    private void sendDepositForfeitedPush(Deposit deposit) {
+        try {
+            Party party = partyDao.findById(deposit.getPartyId()).orElse(null);
+            if (party == null) return;
+
+            String productName = getProductName(party.getProductId());
+
+            Map<String, String> params = Map.of(
+                "productName", productName,
+                "amount", String.valueOf(deposit.getDepositAmount())
+            );
+
+            TemplatePushRequest pushRequest = TemplatePushRequest.builder()
+                .receiverId(deposit.getUserId())
+                .pushCode(PushCodeType.DEPOSIT_FORFEITED.getCode())
+                .params(params)
+                .moduleId(String.valueOf(deposit.getDepositId()))
+                .moduleType(PushCodeType.DEPOSIT_FORFEITED.getModuleType())
+                .build();
+
+            pushService.addTemplatePush(pushRequest);
+            log.info("푸시알림 발송 완료: DEPOSIT_FORFEITED -> userId={}", deposit.getUserId());
+
+        } catch (Exception e) {
+            log.error("푸시알림 발송 실패: depositId={}, error={}", deposit.getDepositId(), e.getMessage());
+        }
+    }
+    // ========== 푸시알림 추가 끝 ==========
 }

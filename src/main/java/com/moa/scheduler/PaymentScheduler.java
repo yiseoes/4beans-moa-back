@@ -3,17 +3,23 @@ package com.moa.scheduler;
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
 import java.util.List;
+import java.util.Map;
 
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
 import com.moa.dao.party.PartyDao;
 import com.moa.dao.partymember.PartyMemberDao;
+import com.moa.dao.product.ProductDao;
 import com.moa.domain.Party;
 import com.moa.domain.PartyMember;
 import com.moa.domain.PaymentRetryHistory;
+import com.moa.domain.Product;
+import com.moa.domain.enums.PushCodeType;
+import com.moa.dto.push.request.TemplatePushRequest;
 import com.moa.service.payment.PaymentRetryService;
 import com.moa.service.payment.PaymentService;
+import com.moa.service.push.PushService;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -25,6 +31,7 @@ import lombok.extern.slf4j.Slf4j;
  * Handles:
  * 1. New monthly payments for parties whose payment day is today
  * 2. Retry attempts for previously failed payments
+ * 3. Payment upcoming notifications (D-1)
  *
  * @author MOA Team
  * @since 2025-12-04
@@ -38,6 +45,11 @@ public class PaymentScheduler {
     private final PartyMemberDao partyMemberDao;
     private final PaymentService paymentService;
     private final PaymentRetryService retryService;
+    
+    // ========== 푸시알림 추가 ==========
+    private final PushService pushService;
+    private final ProductDao productDao;
+    // ========== 푸시알림 추가 끝 ==========
 
     /**
      * Daily payment scheduler - runs at 2:00 AM
@@ -133,4 +145,104 @@ public class PaymentScheduler {
             }
         }
     }
+
+    // ============================================
+    // 푸시알림 추가: 결제 예정 알림 (D-1)
+    // ============================================
+
+    /**
+     * 푸시알림 추가: 결제 예정 알림 - 매일 오후 6시
+     * 다음날 결제 예정인 파티원들에게 PAY_UPCOMING 푸시 발송
+     */
+    @Scheduled(cron = "0 0 18 * * *")
+    public void sendPaymentUpcomingNotifications() {
+        log.info("===== Payment Upcoming Notification Started =====");
+
+        try {
+            LocalDate tomorrow = LocalDate.now().plusDays(1);
+            int tomorrowDay = tomorrow.getDayOfMonth();
+            int lastDayOfMonth = tomorrow.lengthOfMonth();
+
+            // 내일 결제일인 파티 조회
+            List<Party> parties = partyDao.findPartiesByPaymentDay(tomorrowDay, lastDayOfMonth);
+
+            if (parties.isEmpty()) {
+                log.info("내일 결제 예정인 파티가 없습니다.");
+                return;
+            }
+
+            log.info("내일 결제 예정 파티 {}개 발견", parties.size());
+
+            int successCount = 0;
+            int failCount = 0;
+
+            for (Party party : parties) {
+                try {
+                    // 방장 제외 활성 멤버 조회
+                    List<PartyMember> members = partyMemberDao.findActiveMembersExcludingLeader(party.getPartyId());
+
+                    for (PartyMember member : members) {
+                        try {
+                            sendPaymentUpcomingPush(party, member);
+                            successCount++;
+                        } catch (Exception e) {
+                            log.error("푸시 발송 실패: userId={}, error={}", member.getUserId(), e.getMessage());
+                            failCount++;
+                        }
+                    }
+                } catch (Exception e) {
+                    log.error("파티 처리 실패: partyId={}, error={}", party.getPartyId(), e.getMessage());
+                }
+            }
+
+            log.info("결제 예정 알림 발송 완료: 성공={}, 실패={}", successCount, failCount);
+
+        } catch (Exception e) {
+            log.error("결제 예정 알림 스케줄러 실패", e);
+        } finally {
+            log.info("===== Payment Upcoming Notification Finished =====");
+        }
+    }
+
+    /**
+     * 푸시알림 추가: 상품명 조회 헬퍼 메서드
+     */
+    private String getProductName(Integer productId) {
+        if (productId == null) return "OTT 서비스";
+        
+        try {
+            Product product = productDao.getProduct(productId);
+            return (product != null && product.getProductName() != null) 
+                ? product.getProductName() : "OTT 서비스";
+        } catch (Exception e) {
+            log.warn("상품 조회 실패: productId={}", productId);
+            return "OTT 서비스";
+        }
+    }
+
+    /**
+     * 푸시알림 추가: 결제 예정 알림 발송
+     */
+    private void sendPaymentUpcomingPush(Party party, PartyMember member) {
+        String productName = getProductName(party.getProductId());
+        LocalDate tomorrow = LocalDate.now().plusDays(1);
+
+        Map<String, String> params = Map.of(
+            "productName", productName,
+            "amount", String.valueOf(party.getMonthlyFee()),
+            "paymentDate", tomorrow.format(DateTimeFormatter.ofPattern("M월 d일"))
+        );
+
+        TemplatePushRequest pushRequest = TemplatePushRequest.builder()
+            .receiverId(member.getUserId())
+            .pushCode(PushCodeType.PAY_UPCOMING.getCode())
+            .params(params)
+            .moduleId(String.valueOf(party.getPartyId()))
+            .moduleType(PushCodeType.PAY_UPCOMING.getModuleType())
+            .build();
+
+        pushService.addTemplatePush(pushRequest);
+        log.info("푸시알림 발송 완료: PAY_UPCOMING -> userId={}", member.getUserId());
+    }
+    // ========== 푸시알림 추가 끝 ==========
 }
