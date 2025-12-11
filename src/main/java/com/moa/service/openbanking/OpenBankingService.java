@@ -24,6 +24,9 @@ import com.moa.common.exception.ErrorCode;
 import com.moa.config.OpenBankingConfig;
 import com.moa.dao.account.AccountDao;
 import com.moa.domain.Account;
+import com.moa.domain.enums.PushCodeType;
+import com.moa.dto.push.request.TemplatePushRequest;
+import com.moa.service.push.PushService;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -37,9 +40,18 @@ public class OpenBankingService {
     private final RestTemplate restTemplate;
     private final AccountDao accountDao;
 
+    // ========== 푸시알림 추가 ==========
+    private final PushService pushService;
+    // ========== 푸시알림 추가 끝 ==========
+
     // 임시 저장소 (실제로는 Redis나 DB 사용 권장)
     private final Map<String, String> verificationCodes = new HashMap<>();
     private final Map<String, String> userTokens = new HashMap<>();
+    
+    // ========== 푸시알림 추가: 인증 시도 횟수 저장소 ==========
+    private final Map<String, Integer> verificationAttempts = new HashMap<>();
+    private static final int MAX_VERIFY_ATTEMPTS = 3;
+    // ========== 푸시알림 추가 끝 ==========
 
     // ========================================
     // OAuth 인증 관련
@@ -193,6 +205,10 @@ public class OpenBankingService {
         // 4자리 랜덤 코드 생성
         String verificationCode = String.format("%04d", new Random().nextInt(10000));
         verificationCodes.put(userId, verificationCode);
+        
+        // ========== 푸시알림 추가: 인증 시도 횟수 초기화 ==========
+        verificationAttempts.put(userId, 0);
+        // ========== 푸시알림 추가 끝 ==========
 
         // 입금자명: "MOA" + 4자리 코드
         String depositorName = "MOA" + verificationCode;
@@ -202,6 +218,11 @@ public class OpenBankingService {
             depositToUser(account.getBankCode(), account.getAccountNumber(),
                     account.getAccountHolder(), 1, depositorName);
             log.info("1원 인증 입금 완료 - userId: {}, code: {}", userId, verificationCode);
+            
+            // ========== 푸시알림 추가: 인증 요청 알림 ==========
+            sendVerifyRequestedPush(userId, account);
+            // ========== 푸시알림 추가 끝 ==========
+            
             return verificationCode; // 테스트용 반환
         } catch (Exception e) {
             log.error("1원 입금 실패", e);
@@ -214,6 +235,11 @@ public class OpenBankingService {
      */
     public boolean verifyAccount(String userId, String inputCode) {
         String storedCode = verificationCodes.get(userId);
+        
+        // ========== 푸시알림 추가: 인증 시도 횟수 체크 ==========
+        int attemptCount = verificationAttempts.getOrDefault(userId, 0) + 1;
+        verificationAttempts.put(userId, attemptCount);
+        // ========== 푸시알림 추가 끝 ==========
 
         if (storedCode != null && storedCode.equals(inputCode)) {
             // 계좌 인증 완료 처리
@@ -222,10 +248,26 @@ public class OpenBankingService {
 
             accountDao.updateVerifyStatus(account.getAccountId(), "Y");
             verificationCodes.remove(userId);
+            verificationAttempts.remove(userId);
 
             log.info("계좌 인증 완료 - userId: {}", userId);
+            
+            // ========== 푸시알림 추가: 인증 완료 알림 ==========
+            sendAccountVerifiedPush(userId, account);
+            // ========== 푸시알림 추가 끝 ==========
+            
             return true;
         }
+        
+        // ========== 푸시알림 추가: 인증 실패 처리 ==========
+        if (attemptCount >= MAX_VERIFY_ATTEMPTS) {
+            // 시도 횟수 초과
+            verificationCodes.remove(userId);
+            verificationAttempts.remove(userId);
+            sendVerifyExceededPush(userId);
+            log.warn("계좌 인증 시도 횟수 초과 - userId: {}", userId);
+        }
+        // ========== 푸시알림 추가 끝 ==========
 
         return false;
     }
@@ -365,4 +407,97 @@ public class OpenBankingService {
                 Map.entry("092", "토스뱅크"));
         return bankNames.getOrDefault(bankCode, "기타은행");
     }
+
+    // ============================================
+    // 푸시알림 추가: Private 메서드들
+    // ============================================
+
+    /**
+     * 푸시알림 추가: 1원 인증 요청 알림
+     */
+    private void sendVerifyRequestedPush(String userId, Account account) {
+        try {
+            Map<String, String> params = Map.of(
+                "bankName", account.getBankName() != null ? account.getBankName() : "은행",
+                "accountNumber", maskAccountNumber(account.getAccountNumber())
+            );
+
+            TemplatePushRequest pushRequest = TemplatePushRequest.builder()
+                .receiverId(userId)
+                .pushCode(PushCodeType.VERIFY_REQUESTED.getCode())
+                .params(params)
+                .moduleId(String.valueOf(account.getAccountId()))
+                .moduleType(PushCodeType.VERIFY_REQUESTED.getModuleType())
+                .build();
+
+            pushService.addTemplatePush(pushRequest);
+            log.info("푸시알림 발송 완료: VERIFY_REQUESTED -> userId={}", userId);
+
+        } catch (Exception e) {
+            log.error("푸시알림 발송 실패: userId={}, error={}", userId, e.getMessage());
+        }
+    }
+
+    /**
+     * 푸시알림 추가: 계좌 인증 완료 알림
+     */
+    private void sendAccountVerifiedPush(String userId, Account account) {
+        try {
+            Map<String, String> params = Map.of(
+                "bankName", account.getBankName() != null ? account.getBankName() : "은행",
+                "accountNumber", maskAccountNumber(account.getAccountNumber())
+            );
+
+            TemplatePushRequest pushRequest = TemplatePushRequest.builder()
+                .receiverId(userId)
+                .pushCode(PushCodeType.ACCOUNT_VERIFIED.getCode())
+                .params(params)
+                .moduleId(String.valueOf(account.getAccountId()))
+                .moduleType(PushCodeType.ACCOUNT_VERIFIED.getModuleType())
+                .build();
+
+            pushService.addTemplatePush(pushRequest);
+            log.info("푸시알림 발송 완료: ACCOUNT_VERIFIED -> userId={}", userId);
+
+        } catch (Exception e) {
+            log.error("푸시알림 발송 실패: userId={}, error={}", userId, e.getMessage());
+        }
+    }
+
+    /**
+     * 푸시알림 추가: 인증 시도 횟수 초과 알림
+     */
+    private void sendVerifyExceededPush(String userId) {
+        try {
+            Map<String, String> params = Map.of(
+                "maxAttempts", String.valueOf(MAX_VERIFY_ATTEMPTS)
+            );
+
+            TemplatePushRequest pushRequest = TemplatePushRequest.builder()
+                .receiverId(userId)
+                .pushCode(PushCodeType.VERIFY_EXCEEDED.getCode())
+                .params(params)
+                .moduleId(userId)
+                .moduleType(PushCodeType.VERIFY_EXCEEDED.getModuleType())
+                .build();
+
+            pushService.addTemplatePush(pushRequest);
+            log.info("푸시알림 발송 완료: VERIFY_EXCEEDED -> userId={}", userId);
+
+        } catch (Exception e) {
+            log.error("푸시알림 발송 실패: userId={}, error={}", userId, e.getMessage());
+        }
+    }
+
+    /**
+     * 푸시알림 추가: 계좌번호 마스킹 헬퍼 메서드
+     */
+    private String maskAccountNumber(String accountNumber) {
+        if (accountNumber == null || accountNumber.length() < 4) {
+            return "****";
+        }
+        // 뒤 4자리만 보이게 마스킹
+        return "****" + accountNumber.substring(accountNumber.length() - 4);
+    }
+    // ========== 푸시알림 추가 끝 ==========
 }

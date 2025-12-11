@@ -2,6 +2,7 @@ package com.moa.service.payment.impl;
 
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Map;
 
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
@@ -13,24 +14,32 @@ import com.moa.common.exception.ErrorCode;
 import com.moa.dao.partymember.PartyMemberDao;
 import com.moa.dao.party.PartyDao;
 import com.moa.dao.payment.PaymentDao;
+import com.moa.dao.product.ProductDao;
 import com.moa.dao.user.UserCardDao;
+import com.moa.dao.user.UserDao;
 import com.moa.domain.Party;
 import com.moa.domain.PartyMember;
 import com.moa.domain.Payment;
+import com.moa.domain.Product;
+import com.moa.domain.User;
 import com.moa.domain.UserCard;
 import com.moa.domain.enums.MemberStatus;
 import com.moa.domain.enums.PartyStatus;
 import com.moa.domain.enums.PaymentStatus;
+import com.moa.domain.enums.PushCodeType;
 import com.moa.dto.payment.request.PaymentRequest;
 import com.moa.dto.payment.response.PaymentDetailResponse;
 import com.moa.dto.payment.response.PaymentResponse;
+import com.moa.dto.push.request.TemplatePushRequest;
 import com.moa.common.event.MonthlyPaymentCompletedEvent;
 import com.moa.common.event.MonthlyPaymentFailedEvent;
 import com.moa.service.payment.PaymentRetryService;
 import com.moa.service.payment.PaymentService;
 import com.moa.service.payment.TossPaymentService;
+import com.moa.service.push.PushService;
 
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 
 /**
  * 결제 서비스 구현체
@@ -43,6 +52,7 @@ import lombok.RequiredArgsConstructor;
 @Service
 @Transactional
 @RequiredArgsConstructor
+@Slf4j
 public class PaymentServiceImpl implements PaymentService {
 
         private final PaymentDao paymentDao;
@@ -52,6 +62,12 @@ public class PaymentServiceImpl implements PaymentService {
         private final UserCardDao userCardDao;
         private final PaymentRetryService retryService;
         private final ApplicationEventPublisher eventPublisher;
+        
+        // ========== 푸시알림 추가 ==========
+        private final PushService pushService;
+        private final ProductDao productDao; 
+        private final UserDao userDao; 
+        // ========== 푸시알림 추가 끝 ==========
 
         private static final int MAX_RETRY_ATTEMPTS = 4;
 
@@ -332,6 +348,10 @@ public class PaymentServiceImpl implements PaymentService {
                                         payment.getPaymentAmount(),
                                         payment.getTargetMonth()));
 
+                        // ========== 푸시알림 추가: 결제 성공 ==========
+                        sendPaymentSuccessPush(payment, attemptNumber);
+                        // ========== 푸시알림 추가 끝 ==========
+
                 } catch (BusinessException e) {
                         // Payment failed - handle failure and schedule retry
                         handlePaymentFailure(payment, attemptNumber, e);
@@ -354,6 +374,11 @@ public class PaymentServiceImpl implements PaymentService {
                                         e.getErrorCode().getCode(),
                                         e.getMessage(),
                                         nextRetry);
+
+                        // ========== 푸시알림 추가: 결제 실패 (재시도 예정) ==========
+                        sendPaymentFailedRetryPush(payment, attemptNumber, e.getErrorCode().getCode(), e.getMessage(), nextRetry);
+                        // ========== 푸시알림 추가 끝 ==========
+
                 } else {
                         // Max retries exceeded - permanent failure
                         retryService.recordPermanentFailure(payment, attemptNumber, e);
@@ -365,6 +390,10 @@ public class PaymentServiceImpl implements PaymentService {
                                         payment.getUserId(),
                                         payment.getTargetMonth(),
                                         e.getMessage()));
+
+                        // ========== 푸시알림 추가: 결제 최종 실패 ==========
+                        sendPaymentFinalFailedPush(payment, attemptNumber, e.getMessage());
+                        // ========== 푸시알림 추가 끝 ==========
                 }
         }
 
@@ -406,4 +435,212 @@ public class PaymentServiceImpl implements PaymentService {
                 int hoursToAdd = 24 * attemptNumber;
                 return LocalDateTime.now().plusHours(hoursToAdd);
         }
+
+     // ============================================
+     // 푸시알림 추가: Private 메서드들
+     // ============================================
+
+     /**
+      * 푸시알림 추가: 상품명 조회 헬퍼 메서드
+      */
+     private String getProductName(Integer productId) {
+         if (productId == null) return "OTT 서비스";
+         
+         try {
+             Product product = productDao.getProduct(productId);
+             return (product != null && product.getProductName() != null) 
+                 ? product.getProductName() : "OTT 서비스";
+         } catch (Exception e) {
+             log.warn("상품 조회 실패: productId={}", productId);
+             return "OTT 서비스";
+         }
+     }
+
+     /**
+      * 푸시알림 추가: 사용자 닉네임 조회 헬퍼 메서드
+      */
+     private String getUserNickname(String userId) {
+         if (userId == null) return "파티원";
+         
+         try {
+             return userDao.findByUserId(userId)
+                 .map(User::getNickname)
+                 .orElse("파티원");
+         } catch (Exception e) {
+             log.warn("사용자 조회 실패: userId={}", userId);
+             return "파티원";
+         }
+     }
+
+     /**
+      * 푸시알림 추가: 결제 성공 알림
+      */
+     private void sendPaymentSuccessPush(Payment payment, int attemptNumber) {
+         try {
+             Party party = partyDao.findById(payment.getPartyId()).orElse(null);
+             if (party == null) return;
+
+             // ========== 수정: productName 조회 ==========
+             String productName = getProductName(party.getProductId());
+             // ========== 수정 끝 ==========
+
+             String pushCode;
+             Map<String, String> params;
+
+             // 재시도 성공인 경우
+             if (attemptNumber > 1) {
+                 pushCode = PushCodeType.PAY_RETRY_SUCCESS.getCode();
+                 params = Map.of(
+                     "productName", productName,
+                     "attemptNumber", String.valueOf(attemptNumber),
+                     "amount", String.valueOf(payment.getPaymentAmount())
+                 );
+             } else {
+                 // 첫 시도 성공
+                 pushCode = PushCodeType.PAY_SUCCESS.getCode();
+                 params = Map.of(
+                     "productName", productName,
+                     "targetMonth", payment.getTargetMonth(),
+                     "amount", String.valueOf(payment.getPaymentAmount())
+                 );
+             }
+
+             TemplatePushRequest pushRequest = TemplatePushRequest.builder()
+                 .receiverId(payment.getUserId())
+                 .pushCode(pushCode)
+                 .params(params)
+                 .moduleId(String.valueOf(payment.getPaymentId()))
+                 .moduleType(PushCodeType.PAY_SUCCESS.getModuleType())
+                 .build();
+
+             pushService.addTemplatePush(pushRequest);
+             log.info("푸시알림 발송 완료: {} -> userId={}", pushCode, payment.getUserId());
+
+         } catch (Exception e) {
+             log.error("푸시알림 발송 실패: paymentId={}, error={}", payment.getPaymentId(), e.getMessage());
+         }
+     }
+
+     /**
+      * 푸시알림 추가: 결제 실패 (재시도 예정) 알림
+      */
+     private void sendPaymentFailedRetryPush(Payment payment, int attemptNumber, String errorCode, String errorMessage, LocalDateTime nextRetryDate) {
+         try {
+             Party party = partyDao.findById(payment.getPartyId()).orElse(null);
+             if (party == null) return;
+
+             // ========== 수정: productName 조회 ==========
+             String productName = getProductName(party.getProductId());
+             // ========== 수정 끝 ==========
+
+             // 에러 코드에 따른 푸시 코드 결정
+             String pushCode = determinePushCodeByError(errorCode);
+
+             Map<String, String> params = Map.of(
+                 "productName", productName,
+                 "attemptNumber", String.valueOf(attemptNumber),
+                 "errorMessage", errorMessage != null ? errorMessage : "결제 처리 중 오류가 발생했습니다.",
+                 "nextRetryDate", nextRetryDate.toLocalDate().toString()
+             );
+
+             TemplatePushRequest pushRequest = TemplatePushRequest.builder()
+                 .receiverId(payment.getUserId())
+                 .pushCode(pushCode)
+                 .params(params)
+                 .moduleId(String.valueOf(payment.getPaymentId()))
+                 .moduleType(PushCodeType.PAY_FAILED_RETRY.getModuleType())
+                 .build();
+
+             pushService.addTemplatePush(pushRequest);
+             log.info("푸시알림 발송 완료: {} -> userId={}", pushCode, payment.getUserId());
+
+         } catch (Exception e) {
+             log.error("푸시알림 발송 실패: paymentId={}, error={}", payment.getPaymentId(), e.getMessage());
+         }
+     }
+
+     /**
+      * 푸시알림 추가: 결제 최종 실패 알림 (파티원 + 방장)
+      */
+     private void sendPaymentFinalFailedPush(Payment payment, int attemptNumber, String errorMessage) {
+         try {
+             Party party = partyDao.findById(payment.getPartyId()).orElse(null);
+             if (party == null) return;
+
+             // ========== 수정: productName 조회 ==========
+             String productName = getProductName(party.getProductId());
+             // ========== 수정 끝 ==========
+
+             // 1. 파티원에게 알림
+             Map<String, String> memberParams = Map.of(
+                 "productName", productName,
+                 "attemptNumber", String.valueOf(attemptNumber),
+                 "errorMessage", errorMessage != null ? errorMessage : "결제 처리 중 오류가 발생했습니다."
+             );
+
+             TemplatePushRequest memberPush = TemplatePushRequest.builder()
+                 .receiverId(payment.getUserId())
+                 .pushCode(PushCodeType.PAY_FINAL_FAILED.getCode())
+                 .params(memberParams)
+                 .moduleId(String.valueOf(payment.getPaymentId()))
+                 .moduleType(PushCodeType.PAY_FINAL_FAILED.getModuleType())
+                 .build();
+
+             pushService.addTemplatePush(memberPush);
+             log.info("푸시알림 발송 완료: PAY_FINAL_FAILED -> userId={}", payment.getUserId());
+
+             // ========== 수정: memberNickname 조회 ==========
+             // 2. 방장에게 알림 (UserDao로 닉네임 조회)
+             String memberNickname = getUserNickname(payment.getUserId());
+             // ========== 수정 끝 ==========
+
+             Map<String, String> leaderParams = Map.of(
+                 "memberNickname", memberNickname,
+                 "productName", productName,
+                 "errorMessage", errorMessage != null ? errorMessage : "결제 처리 중 오류가 발생했습니다."
+             );
+
+             TemplatePushRequest leaderPush = TemplatePushRequest.builder()
+                 .receiverId(party.getPartyLeaderId())
+                 .pushCode(PushCodeType.PAY_MEMBER_FAILED_LEADER.getCode())
+                 .params(leaderParams)
+                 .moduleId(String.valueOf(payment.getPaymentId()))
+                 .moduleType(PushCodeType.PAY_MEMBER_FAILED_LEADER.getModuleType())
+                 .build();
+
+             pushService.addTemplatePush(leaderPush);
+             log.info("푸시알림 발송 완료: PAY_MEMBER_FAILED_LEADER -> leaderId={}", party.getPartyLeaderId());
+
+         } catch (Exception e) {
+             log.error("푸시알림 발송 실패: paymentId={}, error={}", payment.getPaymentId(), e.getMessage());
+         }
+     }
+
+     /**
+      * 푸시알림 추가: Toss 에러 코드에 따른 푸시 코드 결정
+      */
+     private String determinePushCodeByError(String errorCode) {
+         if (errorCode == null) {
+             return PushCodeType.PAY_FAILED_RETRY.getCode();
+         }
+
+         return switch (errorCode) {
+             // 잔액 부족
+             case "INSUFFICIENT_BALANCE", "NOT_ENOUGH_BALANCE" 
+                 -> PushCodeType.PAY_FAILED_BALANCE.getCode();
+
+             // 한도 초과
+             case "EXCEED_CARD_LIMIT", "DAILY_LIMIT_EXCEEDED", "MONTHLY_LIMIT_EXCEEDED" 
+                 -> PushCodeType.PAY_FAILED_LIMIT.getCode();
+
+             // 카드 오류
+             case "INVALID_CARD_NUMBER", "INVALID_CARD_EXPIRATION", "INVALID_CVV",
+                  "CARD_EXPIRED", "CARD_RESTRICTED", "CARD_LOST_OR_STOLEN" 
+                 -> PushCodeType.PAY_FAILED_CARD.getCode();
+
+             // 기타
+             default -> PushCodeType.PAY_FAILED_RETRY.getCode();
+         };
+     }
+     // ========== 푸시알림 추가 끝 ==========
 }
