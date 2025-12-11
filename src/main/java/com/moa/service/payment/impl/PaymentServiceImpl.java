@@ -31,6 +31,7 @@ import com.moa.service.payment.PaymentService;
 import com.moa.service.payment.TossPaymentService;
 
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 
 /**
  * 결제 서비스 구현체
@@ -43,6 +44,7 @@ import lombok.RequiredArgsConstructor;
 @Service
 @Transactional
 @RequiredArgsConstructor
+@Slf4j
 public class PaymentServiceImpl implements PaymentService {
 
         private final PaymentDao paymentDao;
@@ -134,7 +136,8 @@ public class PaymentServiceImpl implements PaymentService {
                                 userCard.getBillingKey(),
                                 orderId,
                                 amount,
-                                "MOA 월 구독료 (" + targetMonth + ")");
+                                "MOA 월 구독료 (" + targetMonth + ")",
+                                userId);
 
                 // 5. Payment 엔티티 생성
                 Payment payment = Payment.builder()
@@ -312,7 +315,8 @@ public class PaymentServiceImpl implements PaymentService {
                                         userCard.getBillingKey(),
                                         payment.getOrderId(),
                                         payment.getPaymentAmount(),
-                                        "MOA 월 구독료 (" + payment.getTargetMonth() + ")");
+                                        "MOA 월 구독료 (" + payment.getTargetMonth() + ")",
+                                        payment.getUserId());
 
                         // 3. Update payment to COMPLETED
                         payment.setPaymentStatus(PaymentStatus.COMPLETED);
@@ -342,7 +346,16 @@ public class PaymentServiceImpl implements PaymentService {
                 // 1. Update payment status to FAILED
                 paymentDao.updatePaymentStatus(payment.getPaymentId(), "FAILED");
 
-                // 2. Determine if retry should be scheduled
+                // 2. Determine error info
+                String errorCode = e.getErrorCode().getCode();
+                String errorMessage = e.getMessage();
+
+                if (e instanceof com.moa.common.exception.TossPaymentException pe) {
+                        errorCode = pe.getTossErrorCode();
+                        errorMessage = pe.getMessage();
+                }
+
+                // 3. Determine if retry should be scheduled
                 boolean shouldRetry = attemptNumber < MAX_RETRY_ATTEMPTS;
 
                 if (shouldRetry) {
@@ -351,8 +364,8 @@ public class PaymentServiceImpl implements PaymentService {
                         retryService.recordFailureWithRetry(
                                         payment,
                                         attemptNumber,
-                                        e.getErrorCode().getCode(),
-                                        e.getMessage(),
+                                        errorCode,
+                                        errorMessage,
                                         nextRetry);
                 } else {
                         // Max retries exceeded - permanent failure
@@ -364,41 +377,33 @@ public class PaymentServiceImpl implements PaymentService {
                                         payment.getPartyMemberId(),
                                         payment.getUserId(),
                                         payment.getTargetMonth(),
-                                        e.getMessage()));
+                                        errorMessage));
                 }
         }
 
+        /**
+         * 월회비 환불 (파티 탈퇴, 파티 취소 시)
+         */
         @Override
-        @Transactional
         public void refundPayment(Integer partyId, Integer partyMemberId, String reason) {
-                // 1. 초기 결제(INITIAL) 내역 조회
-                Payment payment = paymentDao.findByPartyMemberIdAndType(partyMemberId, "INITIAL")
-                                .orElse(null);
+                Payment payment = paymentDao.findLastMonthlyPayment(partyId, partyMemberId)
+                                .orElseThrow(() -> new BusinessException(ErrorCode.PAYMENT_NOT_FOUND));
 
-                if (payment == null) {
-                        // 결제 내역이 없으면 무시 (보증금만 낸 경우 등)
-                        return;
+                if (!"COMPLETED".equals(payment.getPaymentStatus())) {
+                        throw new BusinessException(ErrorCode.INVALID_PAYMENT_STATUS);
                 }
 
-                // 2. 이미 환불되었는지 확인
-                if (payment.getPaymentStatus() == PaymentStatus.REFUNDED) {
-                        return;
-                }
-
-                // 3. Toss Payments 결제 취소 API 호출
                 try {
-                        tossPaymentService.cancelPayment(
-                                        payment.getTossPaymentKey(),
-                                        reason,
-                                        payment.getPaymentAmount());
+                        tossPaymentService.cancelPayment(payment.getTossPaymentKey(), reason, null);
+                        paymentDao.updatePaymentStatus(payment.getPaymentId(), "REFUNDED");
+                } catch (com.moa.common.exception.TossPaymentException e) {
+                        log.error("Toss refund failed: code={}, message={}", e.getTossErrorCode(), e.getMessage());
+                        // TODO: 환불 재시도 로직 필요
+                        throw new BusinessException(ErrorCode.PAYMENT_FAILED, e.getMessage());
                 } catch (Exception e) {
-                        // 환불 실패 시 로그 남기고 예외 던짐
-                        throw new BusinessException(ErrorCode.INTERNAL_ERROR, "결제 환불 실패: " + e.getMessage());
+                        log.error("Refund failed", e);
+                        throw new BusinessException(ErrorCode.PAYMENT_FAILED);
                 }
-
-                // 4. 상태 업데이트
-                payment.setPaymentStatus(PaymentStatus.REFUNDED);
-                paymentDao.updatePaymentStatus(payment.getPaymentId(), "REFUNDED");
         }
 
         private LocalDateTime calculateNextRetryTime(int attemptNumber) {
