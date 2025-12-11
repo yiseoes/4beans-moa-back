@@ -68,7 +68,9 @@ public class SecurityConfig {
 					"/api/oauth/kakao/callback",
 					"/api/oauth/google/callback",
 					"/api/oauth/kakao/auth",
-					"/api/oauth/google/auth"
+					"/api/oauth/google/auth",
+					"/oauth/google",
+				    "/oauth/kakao"
 				).permitAll()
 
 				// 챗봇, 회원가입/본인인증/비밀번호 재설정

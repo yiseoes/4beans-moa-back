@@ -127,8 +127,9 @@ public class OAuthRestController {
 
 		String scope = URLEncoder.encode("openid email profile", StandardCharsets.UTF_8);
 
-		String url = "https://accounts.google.com/o/oauth2/v2/auth" + "?client_id=" + google.getClientId()
-				+ "&redirect_uri=" + URLEncoder.encode(redirectUri, StandardCharsets.UTF_8) + "&response_type=code"
+	    String url = "https://accounts.google.com/o/oauth2/v2/auth"
+	            + "?client_id=" + google.getClientId()
+	            + "&redirect_uri=" + URLEncoder.encode(redirectUri, StandardCharsets.UTF_8) + "&response_type=code"
 				+ "&scope=" + scope + "&access_type=offline" + "&prompt=consent" + "&state=" + mode;
 
 		return ApiResponse.success(Map.of("url", url));
@@ -140,8 +141,7 @@ public class OAuthRestController {
 
 		RestTemplate rest = new RestTemplate();
 
-		String origin = resolveFrontendOrigin(request);
-		String redirectUri = origin + "/oauth/google";
+		String redirectUri = resolveFrontendOrigin(request) + "/oauth/google";
 
 		MultiValueMap<String, String> params = new LinkedMultiValueMap<>();
 		params.add("grant_type", "authorization_code");
@@ -331,6 +331,6 @@ public class OAuthRestController {
 			return origin;
 		}
 
-		return "https://192.168.0.169:5173";
+		return "https://192.168.0.169.nip.io:5173";
 	}
 }
