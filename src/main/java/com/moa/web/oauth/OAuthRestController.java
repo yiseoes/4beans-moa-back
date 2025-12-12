@@ -47,9 +47,9 @@ public class OAuthRestController {
 	private final UserService userService;
 
 	@GetMapping("/kakao/auth")
-	public ApiResponse<?> kakaoAuth(@RequestParam(defaultValue = "login") String mode, HttpServletRequest request) {
-		String origin = resolveFrontendOrigin(request);
-		String redirectUri = origin + "/oauth/kakao";
+	public ApiResponse<?> kakaoAuth(@RequestParam(defaultValue = "login") String mode) {
+
+		String redirectUri = kakao.getRedirectUri();
 
 		String url = "https://kauth.kakao.com/oauth/authorize" + "?client_id=" + kakao.getClientId() + "&redirect_uri="
 				+ URLEncoder.encode(redirectUri, StandardCharsets.UTF_8) + "&response_type=code" + "&state=" + mode;
@@ -59,12 +59,10 @@ public class OAuthRestController {
 
 	@GetMapping("/kakao/callback")
 	public ApiResponse<?> kakaoCallback(@RequestParam("code") String code,
-			@RequestParam(defaultValue = "login") String mode, HttpServletRequest request) throws Exception {
+			@RequestParam(defaultValue = "login") String mode) {
 
 		RestTemplate rest = new RestTemplate();
-
-		String origin = resolveFrontendOrigin(request);
-		String redirectUri = origin + "/oauth/kakao";
+		String redirectUri = kakao.getRedirectUri();
 
 		MultiValueMap<String, String> params = new LinkedMultiValueMap<>();
 		params.add("grant_type", "authorization_code");
@@ -76,49 +74,65 @@ public class OAuthRestController {
 		HttpHeaders headers = new HttpHeaders();
 		headers.setContentType(MediaType.APPLICATION_FORM_URLENCODED);
 
-		HttpEntity<MultiValueMap<String, String>> tokenRequest = new HttpEntity<>(params, headers);
-		Map<String, Object> tokenResponse = rest.postForObject("https://kauth.kakao.com/oauth/token", tokenRequest,
-				Map.class);
+		Map<String, Object> tokenResponse = rest.postForObject("https://kauth.kakao.com/oauth/token",
+				new HttpEntity<>(params, headers), Map.class);
 
-		String accessToken = (String) tokenResponse.get("access_token");
+		String kakaoAccessToken = (String) tokenResponse.get("access_token");
 
 		HttpHeaders profileHeader = new HttpHeaders();
-		profileHeader.set("Authorization", "Bearer " + accessToken);
+		profileHeader.set("Authorization", "Bearer " + kakaoAccessToken);
 
-		HttpEntity<Void> profileRequest = new HttpEntity<>(profileHeader);
-		Map<String, Object> profile = rest
-				.exchange("https://kapi.kakao.com/v2/user/me", HttpMethod.GET, profileRequest, Map.class).getBody();
+		Map<String, Object> profile = rest.exchange("https://kapi.kakao.com/v2/user/me", HttpMethod.GET,
+				new HttpEntity<>(profileHeader), Map.class).getBody();
 
+		String provider = "kakao";
 		String providerUserId = String.valueOf(profile.get("id"));
-		OAuthAccount exists = oauthService.getOAuthByProvider("kakao", providerUserId);
-		String currentUser = getCurrentUserId();
 
-		if (currentUser != null) {
-			if (exists != null && exists.getReleaseDate() == null && !exists.getUserId().equals(currentUser)) {
-				return ApiResponse.success(Map.of("status", "NEED_TRANSFER", "provider", "kakao", "providerUserId",
-						providerUserId, "fromUserId", exists.getUserId(), "toUserId", currentUser));
+		OAuthAccount oauth = oauthService.getOAuthByProvider(provider, providerUserId);
+		String currentUserId = getCurrentUserId();
+
+		// 1️⃣ 로그인 상태에서 연동 시도
+		if (currentUserId != null) {
+			if (oauth != null && oauth.getReleaseDate() == null && !oauth.getUserId().equals(currentUserId)) {
+				return ApiResponse.success(Map.of("status", "NEED_TRANSFER", "provider", provider, "providerUserId",
+						providerUserId, "fromUserId", oauth.getUserId(), "toUserId", currentUserId));
 			}
 
-			oauthService.connectOAuthAccount(currentUser, "kakao", providerUserId);
+			oauthService.connectOAuthAccount(currentUserId, provider, providerUserId);
 
-			return ApiResponse.success(Map.of("status", "CONNECT", "userId", currentUser, "provider", "kakao",
-					"providerUserId", providerUserId));
-		}
-
-		if (exists == null || exists.getReleaseDate() != null) {
 			return ApiResponse
-					.success(Map.of("status", "NEED_REGISTER", "provider", "kakao", "providerUserId", providerUserId));
+					.success(Map.of("status", "CONNECT", "provider", provider, "providerUserId", providerUserId));
 		}
 
-		UsernamePasswordAuthenticationToken authentication = new UsernamePasswordAuthenticationToken(exists.getUserId(),
-				null, List.of(() -> "ROLE_USER"));
+		// 2️⃣ OAuth 계정이 이미 존재 → 바로 로그인
+		if (oauth != null && oauth.getReleaseDate() == null) {
 
-		var tokenResponseJwt = jwtProvider.generateToken(authentication);
+			UsernamePasswordAuthenticationToken auth = new UsernamePasswordAuthenticationToken(oauth.getUserId(), null,
+					List.of(() -> "ROLE_USER"));
 
-		return ApiResponse.success(Map.of("status", "LOGIN", "userId", exists.getUserId(), "provider", "kakao",
-				"providerUserId", providerUserId, "accessToken", tokenResponseJwt.getAccessToken(), "refreshToken",
-				tokenResponseJwt.getRefreshToken(), "accessTokenExpiresIn",
-				tokenResponseJwt.getAccessTokenExpiresIn()));
+			var token = jwtProvider.generateToken(auth);
+
+			return ApiResponse.success(Map.of("status", "LOGIN", "accessToken", token.getAccessToken(), "refreshToken",
+					token.getRefreshToken(), "accessTokenExpiresIn", token.getAccessTokenExpiresIn()));
+		}
+
+		// 3️⃣ 휴대폰 기반 기존 계정 확인
+		Map<String, Object> kakaoAccount = (Map<String, Object>) profile.get("kakao_account");
+		String phone = kakaoAccount != null ? (String) kakaoAccount.get("phone_number") : null;
+
+		if (phone != null) {
+			phone = phone.replace("+82 ", "0").replace("-", "");
+
+			var userOpt = userService.findByPhone(phone);
+			if (userOpt.isPresent()) {
+				return ApiResponse.success(Map.of("status", "NEED_PHONE_CONNECT", "provider", provider,
+						"providerUserId", providerUserId, "phone", phone, "existingUserId", userOpt.get().getUserId()));
+			}
+		}
+
+		// 4️⃣ 완전 신규
+		return ApiResponse
+				.success(Map.of("status", "NEED_REGISTER", "provider", provider, "providerUserId", providerUserId));
 	}
 
 	@GetMapping("/google/auth")
@@ -127,9 +141,8 @@ public class OAuthRestController {
 
 		String scope = URLEncoder.encode("openid email profile", StandardCharsets.UTF_8);
 
-	    String url = "https://accounts.google.com/o/oauth2/v2/auth"
-	            + "?client_id=" + google.getClientId()
-	            + "&redirect_uri=" + URLEncoder.encode(redirectUri, StandardCharsets.UTF_8) + "&response_type=code"
+		String url = "https://accounts.google.com/o/oauth2/v2/auth" + "?client_id=" + google.getClientId()
+				+ "&redirect_uri=" + URLEncoder.encode(redirectUri, StandardCharsets.UTF_8) + "&response_type=code"
 				+ "&scope=" + scope + "&access_type=offline" + "&prompt=consent" + "&state=" + mode;
 
 		return ApiResponse.success(Map.of("url", url));

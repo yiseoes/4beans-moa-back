@@ -77,6 +77,7 @@ public class SecurityConfig {
 								"/api/chatbot/**",
 								"/api/users/join",
 								"/api/users/add",
+								"/api/users/social/add",
 								"/api/users/check",
 								"/api/users/find-id",
 								"/api/users/pass/**",
@@ -146,7 +147,9 @@ public class SecurityConfig {
 				"http://127.0.0.1:5173",
 				"https://127.0.0.1:5173",
 				"http://192.168.*",
-				"https://192.168.*"));
+				"https://192.168.*",
+				"http://moamoa.cloud:5173",
+			    "https://moamoa.cloud:5173"));
 
 		config.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"));
 		config.setAllowedHeaders(List.of(

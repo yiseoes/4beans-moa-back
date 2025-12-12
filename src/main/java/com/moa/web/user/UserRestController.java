@@ -46,7 +46,7 @@ public class UserRestController {
 	private final AccountDao accountDao;
 	private final UserCardDao userCardDao;
 	private final OAuthAccountService oauthService;
-	
+
 	private final com.moa.service.payment.TossPaymentService tossPaymentService;
 
 	public UserRestController(UserService userService, PassAuthService passAuthService, AccountDao accountDao,
@@ -79,7 +79,12 @@ public class UserRestController {
 	}
 
 	@PostMapping("/add")
-	public ApiResponse<UserResponse> add(@RequestBody @Valid UserCreateRequest request) {
+	public ApiResponse<?> add(@RequestBody @Valid UserCreateRequest request) {
+
+		if (request.getProvider() != null && !request.getProvider().isBlank()) {
+			return ApiResponse.success(userService.addUserAndLogin(request));
+		}
+
 		return ApiResponse.success(userService.addUser(request));
 	}
 

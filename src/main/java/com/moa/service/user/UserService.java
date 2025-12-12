@@ -1,5 +1,6 @@
 package com.moa.service.user;
 
+import java.util.Map;
 import java.util.Optional;
 
 import org.apache.ibatis.annotations.Param;
@@ -38,6 +39,8 @@ public interface UserService {
 
 	UserResponse addUser(UserCreateRequest request);
 
+	Map<String, Object> addUserAndLogin(UserCreateRequest request);
+
 	UserResponse getCurrentUser();
 
 	User findUserIncludeDeleted(String userId);
@@ -55,8 +58,8 @@ public interface UserService {
 	PageResponse<AdminUserListItemResponse> getAdminUserList(AdminUserSearchRequest request);
 
 	UserResponse getUserDetailForAdmin(String userId);
-	
+
 	void unlockByCertification(String userId, String phone, String ci);
-	
+
 	Optional<User> findByPhone(String phone);
 }

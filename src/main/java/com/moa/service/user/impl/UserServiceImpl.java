@@ -3,11 +3,13 @@ package com.moa.service.user.impl;
 import java.time.LocalDateTime;
 import java.util.Collections;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.regex.Pattern;
 
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -15,6 +17,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 
+import com.moa.auth.provider.JwtProvider;
 import com.moa.common.exception.BusinessException;
 import com.moa.common.exception.ErrorCode;
 import com.moa.dao.admin.AdminDao;
@@ -25,6 +28,7 @@ import com.moa.domain.EmailVerification;
 import com.moa.domain.OAuthAccount;
 import com.moa.domain.User;
 import com.moa.domain.enums.UserStatus;
+import com.moa.dto.auth.TokenResponse;
 import com.moa.dto.community.response.PageResponse;
 import com.moa.dto.user.request.AdminUserSearchRequest;
 import com.moa.dto.user.request.CommonCheckRequest;
@@ -58,6 +62,7 @@ public class UserServiceImpl implements UserService {
 	private final OAuthAccountService oauthAccountService;
 	private final AdminDao adminDao;
 	private final UserAddValidator userAddValidator;
+	private final JwtProvider jwtProvider;
 
 	@Value("${app.upload.user.profile-dir}")
 	private String profileUploadDir;
@@ -158,7 +163,11 @@ public class UserServiceImpl implements UserService {
 		boolean isSocial = request.getProvider() != null && !request.getProvider().isBlank()
 				&& request.getProviderUserId() != null && !request.getProviderUserId().isBlank();
 
-		userAddValidator.validateForSignup(request);
+		if (isSocial) {
+			userAddValidator.validateForSocialSignup(request);
+		} else {
+			userAddValidator.validateForSignup(request);
+		}
 
 		if (userDao.existsByPhone(request.getPhone()) > 0) {
 			if (!isSocial) {
@@ -167,18 +176,24 @@ public class UserServiceImpl implements UserService {
 			String provider = request.getProvider();
 			String providerUserId = request.getProviderUserId();
 			String phone = request.getPhone();
+
 			Optional<String> existingUserIdOpt = userDao.findUserIdByPhone(phone);
 			if (existingUserIdOpt.isEmpty()) {
 				throw new BusinessException(ErrorCode.CONFLICT, "휴대폰번호로 회원을 찾을 수 없습니다.");
 			}
+
 			String existingUserId = existingUserIdOpt.get();
+
 			OAuthAccount existing = oauthAccountService.getOAuthByProvider(provider, providerUserId);
 			if (existing != null && !existing.getUserId().equals(existingUserId)) {
 				throw new BusinessException(ErrorCode.CONFLICT, "이미 다른 계정과 연결된 소셜 계정입니다.");
 			}
+
 			oauthAccountService.connectOAuthAccount(existingUserId, provider, providerUserId);
+
 			User existingUser = userDao.findByUserId(existingUserId)
 					.orElseThrow(() -> new BusinessException(ErrorCode.USER_NOT_FOUND));
+
 			return UserResponse.from(existingUser);
 		}
 
@@ -193,9 +208,16 @@ public class UserServiceImpl implements UserService {
 			passCertifiedAt = now;
 		}
 
-		User user = User.builder().userId(request.getUserId().toLowerCase())
-				.password(isSocial ? null : passwordEncoder.encode(request.getPassword()))
-				.nickname(request.getNickname()).phone(request.getPhone()).profileImage(profileImageUrl).role("USER")
+		String userId = isSocial
+				? ("social_" + request.getProvider().toLowerCase() + "_"
+						+ UUID.randomUUID().toString().replace("-", ""))
+				: request.getUserId().toLowerCase();
+
+		String encodedPassword = isSocial ? passwordEncoder.encode(UUID.randomUUID().toString())
+				: passwordEncoder.encode(request.getPassword());
+
+		User user = User.builder().userId(userId).password(encodedPassword).nickname(request.getNickname())
+				.phone(request.getPhone()).profileImage(profileImageUrl).role("USER")
 				.status(isSocial ? UserStatus.ACTIVE : UserStatus.PENDING).regDate(now).ci(request.getCi())
 				.passCertifiedAt(passCertifiedAt).loginFailCount(0).provider(isSocial ? request.getProvider() : null)
 				.build();
@@ -219,10 +241,26 @@ public class UserServiceImpl implements UserService {
 			OAuthAccount account = OAuthAccount.builder().oauthId(UUID.randomUUID().toString())
 					.provider(request.getProvider()).providerUserId(request.getProviderUserId())
 					.userId(user.getUserId()).build();
+
 			oauthAccountService.addOAuthAccount(account);
 		}
 
 		return UserResponse.from(user);
+	}
+
+	@Override
+	@Transactional
+	public Map<String, Object> addUserAndLogin(UserCreateRequest request) {
+
+		UserResponse user = addUser(request);
+
+		UsernamePasswordAuthenticationToken authentication = new UsernamePasswordAuthenticationToken(user.getUserId(),
+				null, List.of(() -> "ROLE_USER"));
+
+		TokenResponse token = jwtProvider.generateToken(authentication);
+
+		return Map.of("user", user, "accessToken", token.getAccessToken(), "refreshToken", token.getRefreshToken(),
+				"accessTokenExpiresIn", token.getAccessTokenExpiresIn());
 	}
 
 	@Override
