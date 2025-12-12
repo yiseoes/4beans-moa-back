@@ -8,6 +8,7 @@ import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpMethod;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.config.annotation.authentication.configuration.AuthenticationConfiguration;
+import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
@@ -25,6 +26,7 @@ import com.moa.auth.handler.JwtAuthenticationEntryPoint;
 import lombok.RequiredArgsConstructor;
 
 @Configuration
+@EnableMethodSecurity(prePostEnabled = true)
 @RequiredArgsConstructor
 public class SecurityConfig {
 
@@ -103,6 +105,9 @@ public class SecurityConfig {
 
 						// 관리자 API
 						.requestMatchers("/api/admin/**").hasAuthority("ADMIN")
+
+						// 푸시 관리자 API
+						.requestMatchers("/api/push/admin/**").hasAuthority("ADMIN")
 
 						// 상품 조회는 모두 허용
 						.requestMatchers(HttpMethod.GET, "/api/product/**").permitAll()
