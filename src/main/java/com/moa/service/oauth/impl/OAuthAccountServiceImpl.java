@@ -55,17 +55,28 @@ public class OAuthAccountServiceImpl implements OAuthAccountService {
 	@Override
 	public void connectOAuthAccount(String userId, String provider, String providerUserId) {
 
-		OAuthAccount existing = dao.getOAuthByProvider(provider, providerUserId);
+	    OAuthAccount existing = dao.getOAuthByProvider(provider, providerUserId);
 
-		if (existing != null) {
-			dao.reconnectOAuthAccount(existing.getOauthId());
-			return;
-		}
+	    if (existing != null) {
 
-		OAuthAccount account = OAuthAccount.builder().oauthId(UUID.randomUUID().toString()).userId(userId)
-				.provider(provider).providerUserId(providerUserId).connectedDate(LocalDateTime.now()).build();
+	        if (userId.equals(existing.getUserId())) {
+	            dao.reconnectOAuthAccount(existing.getOauthId());
+	            return;
+	        }
 
-		dao.addOAuthAccount(account);
+	        dao.transferOAuthUser(provider, providerUserId, userId);
+	        return;
+	    }
+
+	    OAuthAccount account = OAuthAccount.builder()
+	            .oauthId(UUID.randomUUID().toString())
+	            .userId(userId)
+	            .provider(provider)
+	            .providerUserId(providerUserId)
+	            .connectedDate(LocalDateTime.now())
+	            .build();
+
+	    dao.addOAuthAccount(account);
 	}
 
 	@Override

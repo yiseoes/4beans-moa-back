@@ -40,13 +40,14 @@
 
 	<select id="getOAuthByProvider" resultMap="oauthMap">
 		SELECT *
-		FROM OAUTH_ACCOUNT
+		FROM
+		OAUTH_ACCOUNT
 		WHERE PROVIDER = #{provider}
-		AND PROVIDER_USER_ID = #{providerUserId}
-		AND RELEASE_DATE IS NULL
-		ORDER BY CONNECTED_DATE DESC
+		AND PROVIDER_USER_ID =
+		#{providerUserId}
 		LIMIT 1
 	</select>
+
 
 	<update id="updateOAuthRelease">
 		UPDATE OAUTH_ACCOUNT
