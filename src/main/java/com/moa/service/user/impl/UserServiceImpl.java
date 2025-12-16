@@ -1,5 +1,6 @@
 package com.moa.service.user.impl;
 
+import java.io.File;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
@@ -15,6 +16,7 @@ import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.util.StringUtils;
 import org.springframework.web.multipart.MultipartFile;
 
 import com.moa.auth.provider.JwtProvider;
@@ -347,59 +349,71 @@ public class UserServiceImpl implements UserService {
 
 	@Override
 	public UserResponse updateUser(String userId, UserUpdateRequest request) {
-		User user = userDao.findByUserId(userId).orElseThrow(() -> new BusinessException(ErrorCode.USER_NOT_FOUND));
+	    User user = userDao.findByUserId(userId)
+	        .orElseThrow(() -> new BusinessException(ErrorCode.USER_NOT_FOUND));
 
-		ensureNotBlocked(user);
+	    ensureNotBlocked(user);
 
-		if (!user.getNickname().equals(request.getNickname())) {
-			if (userDao.existsByNicknameExceptMe(request.getNickname(), userId) > 0) {
-				throw new BusinessException(ErrorCode.CONFLICT, "이미 사용 중인 닉네임입니다.");
-			}
-		}
+	    if (!user.getNickname().equals(request.getNickname())) {
+	        if (userDao.existsByNicknameExceptMe(request.getNickname(), userId) > 0) {
+	            throw new BusinessException(ErrorCode.CONFLICT, "이미 사용 중인 닉네임입니다.");
+	        }
+	    }
 
-		User updated = User.builder().userId(user.getUserId()).password(user.getPassword())
-				.nickname(request.getNickname()).phone(request.getPhone()).profileImage(request.getProfileImage())
-				.agreeMarketing(request.isAgreeMarketing()).role(user.getRole()).status(user.getStatus())
-				.regDate(user.getRegDate()).ci(user.getCi()).passCertifiedAt(user.getPassCertifiedAt())
-				.lastLoginDate(user.getLastLoginDate()).loginFailCount(user.getLoginFailCount())
-				.unlockScheduledAt(user.getUnlockScheduledAt()).deleteDate(user.getDeleteDate())
-				.deleteType(user.getDeleteType()).deleteDetail(user.getDeleteDetail()).build();
+	    User updated = User.builder()
+	        .userId(user.getUserId())
+	        .password(user.getPassword())
+	        .nickname(request.getNickname())
+	        .phone(request.getPhone())
+	        .profileImage(request.getProfileImage())
+	        .agreeMarketing(request.isAgreeMarketing())
+	        .role(user.getRole())
+	        .status(user.getStatus())
+	        .regDate(user.getRegDate())
+	        .ci(user.getCi())
+	        .passCertifiedAt(user.getPassCertifiedAt())
+	        .lastLoginDate(user.getLastLoginDate())
+	        .loginFailCount(user.getLoginFailCount())
+	        .unlockScheduledAt(user.getUnlockScheduledAt())
+	        .deleteDate(user.getDeleteDate())
+	        .deleteType(user.getDeleteType())
+	        .deleteDetail(user.getDeleteDetail())
+	        .build();
 
-		userDao.updateUserProfile(updated);
+	    userDao.updateUserProfile(updated);
 
-		return UserResponse.from(updated);
+	    return UserResponse.from(updated);
 	}
 
 	@Override
 	public String uploadProfileImage(String userId, MultipartFile file) {
-		if (file == null || file.isEmpty()) {
-			throw new BusinessException(ErrorCode.BAD_REQUEST, "업로드할 파일이 없습니다.");
-		}
+	    if (file == null || file.isEmpty()) {
+	        throw new BusinessException(ErrorCode.BAD_REQUEST, "업로드할 파일이 없습니다.");
+	    }
 
-		User user = userDao.findByUserId(userId).orElseThrow(() -> new BusinessException(ErrorCode.USER_NOT_FOUND));
+	    User user = userDao.findByUserId(userId)
+	            .orElseThrow(() -> new BusinessException(ErrorCode.USER_NOT_FOUND));
 
-		ensureNotBlocked(user);
+	    ensureNotBlocked(user);
 
-		try {
-			java.io.File dir = new java.io.File(profileUploadDir);
-			if (!dir.exists()) {
-				dir.mkdirs();
-			}
+	    try {
+	        File dir = new File(profileUploadDir);
+	        if (!dir.exists()) dir.mkdirs();
 
-			String ext = org.springframework.util.StringUtils.getFilenameExtension(file.getOriginalFilename());
-			String newFileName = UUID.randomUUID() + "." + ext;
+	        String ext = StringUtils.getFilenameExtension(file.getOriginalFilename());
+	        String newFileName = UUID.randomUUID() + "." + ext;
 
-			java.io.File dest = new java.io.File(dir, newFileName);
-			file.transferTo(dest);
+	        File dest = new File(dir, newFileName);
+	        file.transferTo(dest);
 
-			String imageUrl = profileUrlPrefix + newFileName;
+	        String imageUrl = profileUrlPrefix + newFileName;
 
-			userDao.updateProfileImage(userId, imageUrl);
+	        userDao.updateProfileImage(userId, imageUrl);
 
-			return imageUrl;
-		} catch (Exception e) {
-			throw new BusinessException(ErrorCode.INTERNAL_ERROR, "이미지 업로드 실패");
-		}
+	        return imageUrl;
+	    } catch (Exception e) {
+	        throw new BusinessException(ErrorCode.INTERNAL_ERROR, "이미지 업로드 실패");
+	    }
 	}
 
 	@Override
