@@ -1,9 +1,15 @@
 package com.moa.web.auth;
 
+import java.net.URLEncoder;
+import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.Map;
 
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseCookie;
+import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -41,7 +47,9 @@ import lombok.RequiredArgsConstructor;
 @RequestMapping("/api/auth")
 @RequiredArgsConstructor
 public class AuthRestController {
-
+	
+	@Value("${app.frontend-url}")
+	private String frontendUrl;
 	private final AuthService authService;
 	private final OtpService otpService;
 	private final PassAuthService passAuthService;
@@ -131,6 +139,19 @@ public class AuthRestController {
 	public ApiResponse<Void> verifyEmail(@RequestParam("token") String token) {
 		authService.verifyEmail(token);
 		return ApiResponse.success(null);
+	}
+	
+	@GetMapping("/verify-email")
+	public ResponseEntity<Void> verifyEmailByLink(@RequestParam("token") String token) {
+		try {
+			authService.verifyEmail(token);
+			String location = frontendUrl + "/email-verified?result=success";
+			return ResponseEntity.status(HttpStatus.FOUND).header(HttpHeaders.LOCATION, location).build();
+		} catch (Exception e) {
+			String msg = URLEncoder.encode("인증에 실패했습니다.", StandardCharsets.UTF_8);
+			String location = frontendUrl + "/email-verified?result=fail&message=" + msg;
+			return ResponseEntity.status(HttpStatus.FOUND).header(HttpHeaders.LOCATION, location).build();
+		}
 	}
 
 	@PostMapping("/otp/setup")
