@@ -350,76 +350,78 @@ public class UserServiceImpl implements UserService {
 
 	@Override
 	public UserResponse updateUser(String userId, UserUpdateRequest request) {
-	    User user = userDao.findByUserId(userId)
-	        .orElseThrow(() -> new BusinessException(ErrorCode.USER_NOT_FOUND));
+		User user = userDao.findByUserId(userId)
+				.orElseThrow(() -> new BusinessException(ErrorCode.USER_NOT_FOUND));
 
-	    ensureNotBlocked(user);
+		ensureNotBlocked(user);
 
-	    if (!user.getNickname().equals(request.getNickname())) {
-	        if (userDao.existsByNicknameExceptMe(request.getNickname(), userId) > 0) {
-	            throw new BusinessException(ErrorCode.CONFLICT, "이미 사용 중인 닉네임입니다.");
-	        }
-	    }
-	    String profileImage = user.getProfileImage();
-	    if (request.getProfileImage() != null &&
-	        request.getProfileImage().startsWith("/uploads/")) {
-	        profileImage = request.getProfileImage();
-	    }
+		if (!user.getNickname().equals(request.getNickname())) {
+			if (userDao.existsByNicknameExceptMe(request.getNickname(), userId) > 0) {
+				throw new BusinessException(ErrorCode.CONFLICT, "이미 사용 중인 닉네임입니다.");
+			}
+		}
+		String profileImage = user.getProfileImage();
+		if (request.getProfileImage() != null &&
+				request.getProfileImage().startsWith("/uploads/")) {
+			profileImage = request.getProfileImage();
+		}
 
-	    User updated = User.builder()
-	        .userId(user.getUserId())
-	        .password(user.getPassword())
-	        .nickname(request.getNickname())
-	        .phone(request.getPhone())
-	        .profileImage(profileImage)
-	        .agreeMarketing(request.isAgreeMarketing())
-	        .role(user.getRole())
-	        .status(user.getStatus())
-	        .regDate(user.getRegDate())
-	        .ci(user.getCi())
-	        .passCertifiedAt(user.getPassCertifiedAt())
-	        .lastLoginDate(user.getLastLoginDate())
-	        .loginFailCount(user.getLoginFailCount())
-	        .unlockScheduledAt(user.getUnlockScheduledAt())
-	        .deleteDate(user.getDeleteDate())
-	        .deleteType(user.getDeleteType())
-	        .deleteDetail(user.getDeleteDetail())
-	        .build();
+		User updated = User.builder()
+				.userId(user.getUserId())
+				.password(user.getPassword())
+				.nickname(request.getNickname())
+				.phone(request.getPhone())
+				.profileImage(profileImage)
+				.agreeMarketing(request.isAgreeMarketing())
+				.role(user.getRole())
+				.status(user.getStatus())
+				.regDate(user.getRegDate())
+				.ci(user.getCi())
+				.passCertifiedAt(user.getPassCertifiedAt())
+				.lastLoginDate(user.getLastLoginDate())
+				.loginFailCount(user.getLoginFailCount())
+				.unlockScheduledAt(user.getUnlockScheduledAt())
+				.deleteDate(user.getDeleteDate())
+				.deleteType(user.getDeleteType())
+				.deleteDetail(user.getDeleteDetail())
+				.build();
 
-	    userDao.updateUserProfile(updated);
+		userDao.updateUserProfile(updated);
 
-	    return UserResponse.from(updated);
+		return UserResponse.from(updated);
 	}
 
 	@Override
 	public String uploadProfileImage(String userId, MultipartFile file) {
-	    if (file == null || file.isEmpty()) {
-	        throw new BusinessException(ErrorCode.BAD_REQUEST, "업로드할 파일이 없습니다.");
-	    }
+		if (file == null || file.isEmpty()) {
+			throw new BusinessException(ErrorCode.BAD_REQUEST, "업로드할 파일이 없습니다.");
+		}
 
-	    User user = userDao.findByUserId(userId)
-	            .orElseThrow(() -> new BusinessException(ErrorCode.USER_NOT_FOUND));
+		User user = userDao.findByUserId(userId)
+				.orElseThrow(() -> new BusinessException(ErrorCode.USER_NOT_FOUND));
 
-	    ensureNotBlocked(user);
+		ensureNotBlocked(user);
 
-	    try {
-	        File dir = new File(profileUploadDir);
-	        if (!dir.exists()) dir.mkdirs();
+		try {
+			File dir = new File(profileUploadDir);
+			if (!dir.exists())
+				dir.mkdirs();
 
-	        String ext = StringUtils.getFilenameExtension(file.getOriginalFilename());
-	        String newFileName = UUID.randomUUID() + "." + ext;
+			String ext = StringUtils.getFilenameExtension(file.getOriginalFilename());
+			String newFileName = UUID.randomUUID() + "." + ext;
 
-	        File dest = new File(dir, newFileName);
-	        file.transferTo(dest);
+			File dest = new File(dir, newFileName);
+			file.transferTo(dest);
 
-	        String imageUrl = profileUrlPrefix + newFileName;
+			// [Modified 2025-12-17] 내부 combinePath 메서드 사용하여 URL 결합
+			String imageUrl = combinePath(profileUrlPrefix, newFileName);
 
-	        userDao.updateProfileImage(userId, imageUrl);
+			userDao.updateProfileImage(userId, imageUrl);
 
-	        return imageUrl;
-	    } catch (Exception e) {
-	        throw new BusinessException(ErrorCode.INTERNAL_ERROR, "이미지 업로드 실패");
-	    }
+			return imageUrl;
+		} catch (Exception e) {
+			throw new BusinessException(ErrorCode.INTERNAL_ERROR, "이미지 업로드 실패");
+		}
 	}
 
 	@Override
@@ -505,6 +507,24 @@ public class UserServiceImpl implements UserService {
 	private void ensureNotBlocked(User user) {
 		if (user.getStatus() == UserStatus.BLOCK) {
 			throw new BusinessException(ErrorCode.ACCOUNT_BLOCKED);
+		}
+	}
+
+	private String combinePath(String prefix, String suffix) {
+		if (prefix == null)
+			prefix = "";
+		if (suffix == null)
+			suffix = "";
+
+		boolean prefixHasSlash = prefix.endsWith("/") || prefix.endsWith("\\");
+		boolean suffixHasSlash = suffix.startsWith("/") || suffix.startsWith("\\");
+
+		if (prefixHasSlash && suffixHasSlash) {
+			return prefix + suffix.substring(1);
+		} else if (!prefixHasSlash && !suffixHasSlash) {
+			return prefix + "/" + suffix;
+		} else {
+			return prefix + suffix;
 		}
 	}
 

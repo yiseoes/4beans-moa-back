@@ -85,7 +85,8 @@ public class ProductRestController {
             }
 
             String savedFilename = UUID.randomUUID().toString() + extension;
-            String fullPath = uploadDir + savedFilename;
+            // String fullPath = uploadDir + savedFilename;
+            String fullPath = combinePath(uploadDir, savedFilename);
 
             logger.debug("Saving to: {}", fullPath);
 
@@ -99,7 +100,9 @@ public class ProductRestController {
             file.transferTo(dest.getAbsoluteFile());
             logger.debug("File saved successfully");
 
-            return urlPrefix + savedFilename;
+            // [Modified 2025-12-17] 내부 combinePath 메서드 사용하여 URL 결합
+            // return urlPrefix + savedFilename;
+            return combinePath(urlPrefix, savedFilename);
         } catch (Exception e) {
             logger.error("File upload failed", e);
             throw e;
@@ -110,5 +113,23 @@ public class ProductRestController {
     public ApiResponse<List<ProductDTO>> getCategoryList() throws Exception {
         logger.debug("Request [getCategoryList] Time: {}", java.time.LocalDateTime.now());
         return ApiResponse.success(productService.getCategoryList());
+    }
+
+    private String combinePath(String prefix, String suffix) {
+        if (prefix == null)
+            prefix = "";
+        if (suffix == null)
+            suffix = "";
+
+        boolean prefixHasSlash = prefix.endsWith("/") || prefix.endsWith("\\");
+        boolean suffixHasSlash = suffix.startsWith("/") || suffix.startsWith("\\");
+
+        if (prefixHasSlash && suffixHasSlash) {
+            return prefix + suffix.substring(1);
+        } else if (!prefixHasSlash && !suffixHasSlash) {
+            return prefix + "/" + suffix;
+        } else {
+            return prefix + suffix;
+        }
     }
 }

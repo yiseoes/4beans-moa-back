@@ -13,57 +13,50 @@ import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
 @MapperScan(basePackages = "com.moa.dao")
 public class WebConfig implements WebMvcConfigurer {
 
-    @Value("${app.upload.user.profile-dir}")
-    private String profileUploadDir;
+	@Value("${app.upload.user.profile-dir}")
+	private String profileUploadDir;
 
-    @Value("${app.upload.user.profile-url-prefix}")
-    private String profileUrlPrefix;
+	@Value("${app.upload.user.profile-url-prefix}")
+	private String profileUrlPrefix;
 
-    @Value("${app.upload.product-image-dir}")
-    private String productImageUploadDir;
+	@Value("${app.upload.product-image-dir}")
+	private String productImageUploadDir;
 
-    @Value("${app.upload.product-image-url-prefix}")
-    private String productImageUrlPrefix;
-    
-    @Value("${app.upload.community.inquiry-dir}")
-    private String communityInquiryDir;
+	@Value("${app.upload.product-image-url-prefix}")
+	private String productImageUrlPrefix;
 
-    @Value("${app.upload.community.inquiry-url-prefix}")
-    private String communityInquiryUrlPrefix;
+	@Value("${app.upload.community.inquiry-dir}")
+	private String communityInquiryDir;
 
-    @Value("${app.upload.community.answer-dir}")
-    private String communityAnswerDir;
+	@Value("${app.upload.community.inquiry-url-prefix}")
+	private String communityInquiryUrlPrefix;
 
-    @Value("${app.upload.community.answer-url-prefix}")
-    private String communityAnswerUrlPrefix;
+	@Value("${app.upload.community.answer-dir}")
+	private String communityAnswerDir;
 
-    @Override
-    public void addResourceHandlers(ResourceHandlerRegistry registry) {
+	@Value("${app.upload.community.answer-url-prefix}")
+	private String communityAnswerUrlPrefix;
 
-        registry.addResourceHandler(profileUrlPrefix + "/**")
-                .addResourceLocations(Paths.get(profileUploadDir)
-                        .toAbsolutePath()
-                        .toUri()
-                        .toString());
+	@Override
+	public void addResourceHandlers(ResourceHandlerRegistry registry) {
 
-        registry.addResourceHandler(productImageUrlPrefix + "/**")
-                .addResourceLocations(Paths.get(productImageUploadDir)
-                        .toAbsolutePath()
-                        .toUri()
-                        .toString());
-        
-        registry.addResourceHandler(communityInquiryUrlPrefix + "/**")
-        .addResourceLocations(Paths.get(communityInquiryDir)
-        		.toAbsolutePath()
-        		.toUri()
-        		.toString());
-        
-        registry.addResourceHandler(communityAnswerUrlPrefix + "/**")
-        .addResourceLocations(Paths.get(communityAnswerDir)
-        		.toAbsolutePath()
-        		.toUri()
-        		.toString());
-    }
+		registry.addResourceHandler(profileUrlPrefix + "/**").addResourceLocations(getUriPath(profileUploadDir));
+
+		registry.addResourceHandler(productImageUrlPrefix + "/**")
+				.addResourceLocations(getUriPath(productImageUploadDir));
+
+		registry.addResourceHandler(communityInquiryUrlPrefix + "/**")
+				.addResourceLocations(getUriPath(communityInquiryDir));
+
+		registry.addResourceHandler(communityAnswerUrlPrefix + "/**")
+				.addResourceLocations(getUriPath(communityAnswerDir));
+	}
+
+	private String getUriPath(String path) {
+		String uri = Paths.get(path).toAbsolutePath().normalize().toUri().toString();
+
+		return uri.endsWith("/") ? uri : uri + "/";
+	}
 
 	@Override
 	public void addViewControllers(ViewControllerRegistry registry) {
