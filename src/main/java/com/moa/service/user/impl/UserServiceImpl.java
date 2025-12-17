@@ -446,6 +446,33 @@ public class UserServiceImpl implements UserService {
 	}
 
 	@Override
+	public void restoreByCertification(String userId, String phone, String ci) {
+		User user = userDao.findByUserIdIncludeDeleted(userId)
+				.orElseThrow(() -> new BusinessException(ErrorCode.USER_NOT_FOUND));
+
+		if (user.getStatus() != UserStatus.WITHDRAW) {
+			throw new BusinessException(ErrorCode.CONFLICT, "탈퇴한 계정이 아닙니다.");
+		}
+
+		if (adminDao.findActiveBlacklistByUserId(userId) != null) {
+			throw new BusinessException(ErrorCode.ACCOUNT_BLOCKED);
+		}
+
+		if (user.getPhone() == null || !user.getPhone().equals(phone)) {
+			throw new BusinessException(ErrorCode.UNAUTHORIZED, "본인인증 정보가 계정 정보와 일치하지 않습니다.");
+		}
+
+		if (user.getCi() != null && ci != null && !user.getCi().equals(ci)) {
+			throw new BusinessException(ErrorCode.UNAUTHORIZED, "본인인증 정보가 계정 정보와 일치하지 않습니다.");
+		}
+
+		userDao.restoreUser(userId);
+		userDao.updateUserStatus(userId, UserStatus.ACTIVE);
+		userDao.resetLoginFailCount(userId);
+		userDao.updateLastLoginDate(userId);
+	}
+
+	@Override
 	public void unlockByCertification(String userId, String phone, String ci) {
 		User user = userDao.findByUserIdIncludeDeleted(userId)
 				.orElseThrow(() -> new BusinessException(ErrorCode.USER_NOT_FOUND));

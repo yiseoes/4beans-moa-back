@@ -78,7 +78,7 @@ public class AuthServiceImpl implements AuthService {
 				throw new BusinessException(ErrorCode.FORBIDDEN, "로그인 5회 실패로 잠금 처리되었습니다.");
 			}
 
-			throw new BusinessException(ErrorCode.INVALID_LOGIN,"비밀번호를 확인해주세요.");
+			throw new BusinessException(ErrorCode.INVALID_LOGIN, "비밀번호를 확인해주세요.");
 		}
 
 		if (user.getStatus() == UserStatus.PENDING) {
@@ -205,6 +205,16 @@ public class AuthServiceImpl implements AuthService {
 		backupCodeService.verifyForLogin(userId, request.getCode());
 
 		userDao.updateLastLoginDate(userId);
+
+		Authentication authentication = new UsernamePasswordAuthenticationToken(userId, null,
+				List.of(new SimpleGrantedAuthority(user.getRole())));
+
+		return jwtProvider.generateToken(authentication);
+	}
+
+	@Override
+	public TokenResponse issueToken(String userId) {
+		User user = userDao.findByUserId(userId).orElseThrow(() -> new BusinessException(ErrorCode.USER_NOT_FOUND));
 
 		Authentication authentication = new UsernamePasswordAuthenticationToken(userId, null,
 				List.of(new SimpleGrantedAuthority(user.getRole())));

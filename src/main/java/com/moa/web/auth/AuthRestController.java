@@ -47,7 +47,7 @@ import lombok.RequiredArgsConstructor;
 @RequestMapping("/api/auth")
 @RequiredArgsConstructor
 public class AuthRestController {
-	
+
 	@Value("${app.frontend-url}")
 	private String frontendUrl;
 	private final AuthService authService;
@@ -58,50 +58,40 @@ public class AuthRestController {
 	private final BackupCodeService backupCodeService;
 
 	@PostMapping("/login")
-	public ApiResponse<LoginResponse> login(@RequestBody @Valid LoginRequest request,
-	                                        HttpServletRequest httpRequest,
-	                                        HttpServletResponse httpResponse) {
+	public ApiResponse<LoginResponse> login(@RequestBody @Valid LoginRequest request, HttpServletRequest httpRequest,
+			HttpServletResponse httpResponse) {
 
-	    String clientIp = extractClientIp(httpRequest);
-	    String userAgent = httpRequest.getHeader("User-Agent");
-	    String loginType = "PASSWORD";
+		String clientIp = extractClientIp(httpRequest);
+		String userAgent = httpRequest.getHeader("User-Agent");
+		String loginType = "PASSWORD";
 
-	    try {
-	        LoginResponse response = authService.login(request);
+		try {
+			LoginResponse response = authService.login(request);
 
-	        String userId = extractUserIdFromLoginRequest(request);
-	        if (userId == null || userId.isBlank()) {
-	            userId = response.getUserId();
-	        }
+			String userId = extractUserIdFromLoginRequest(request);
+			if (userId == null || userId.isBlank()) {
+				userId = response.getUserId();
+			}
 
-	        loginHistoryService.recordSuccess(userId, loginType, clientIp, userAgent);
+			loginHistoryService.recordSuccess(userId, loginType, clientIp, userAgent);
 
-	        if (!response.isOtpRequired()) {
-	            ResponseCookie accessCookie = ResponseCookie.from("ACCESS_TOKEN", response.getAccessToken())
-	                    .httpOnly(true)
-	                    .secure(true)
-	                    .sameSite("None")
-	                    .path("/")
-	                    .maxAge(response.getAccessTokenExpiresIn())
-	                    .build();
+			if (!response.isOtpRequired()) {
+				ResponseCookie accessCookie = ResponseCookie.from("ACCESS_TOKEN", response.getAccessToken())
+						.httpOnly(true).secure(true).sameSite("None").path("/")
+						.maxAge(response.getAccessTokenExpiresIn()).build();
 
-	            ResponseCookie refreshCookie = ResponseCookie.from("REFRESH_TOKEN", response.getRefreshToken())
-	                    .httpOnly(true)
-	                    .secure(true)
-	                    .sameSite("None")
-	                    .path("/")
-	                    .maxAge(60 * 60 * 24 * 14)
-	                    .build();
+				ResponseCookie refreshCookie = ResponseCookie.from("REFRESH_TOKEN", response.getRefreshToken())
+						.httpOnly(true).secure(true).sameSite("None").path("/").maxAge(60 * 60 * 24 * 14).build();
 
-	            httpResponse.addHeader("Set-Cookie", accessCookie.toString());
-	            httpResponse.addHeader("Set-Cookie", refreshCookie.toString());
-	        }
+				httpResponse.addHeader("Set-Cookie", accessCookie.toString());
+				httpResponse.addHeader("Set-Cookie", refreshCookie.toString());
+			}
 
-	        return ApiResponse.success(response);
+			return ApiResponse.success(response);
 
-	    } catch (BusinessException e) {
-	        throw e;
-	    }
+		} catch (BusinessException e) {
+			throw e;
+		}
 	}
 
 	@PostMapping("/login/otp-verify")
@@ -140,7 +130,7 @@ public class AuthRestController {
 		authService.verifyEmail(token);
 		return ApiResponse.success(null);
 	}
-	
+
 	@GetMapping("/verify-email")
 	public ResponseEntity<Void> verifyEmailByLink(@RequestParam("token") String token) {
 		try {
@@ -261,6 +251,60 @@ public class AuthRestController {
 		} catch (Exception e) {
 			return null;
 		}
+	}
+
+	@PostMapping("/restore")
+	public ApiResponse<Map<String, Object>> restore(@RequestBody @Valid com.moa.dto.auth.RestoreAccountRequest request,
+			HttpServletRequest httpRequest, HttpServletResponse httpResponse) {
+
+		Map<String, Object> data;
+		try {
+			data = passAuthService.verifyCertification(request.getImpUid());
+		} catch (Exception e) {
+			throw new BusinessException(ErrorCode.INTERNAL_ERROR, "본인인증 처리 중 오류가 발생했습니다.");
+		}
+
+		Object phoneObj = data.get("phone");
+		String phone = phoneObj != null ? phoneObj.toString() : null;
+		Object ciObj = data.get("ci");
+		String ci = ciObj != null ? ciObj.toString() : null;
+
+		if (phone == null || phone.isBlank()) {
+			throw new BusinessException(ErrorCode.INTERNAL_ERROR, "본인인증 결과에 휴대폰 번호가 없습니다.");
+		}
+
+		String userId = request.getUserId().toLowerCase();
+
+		userService.restoreByCertification(userId, phone, ci);
+
+		TokenResponse token = authService.issueToken(userId);
+
+		boolean isHttps = "https".equalsIgnoreCase(httpRequest.getHeader("X-Forwarded-Proto"))
+				|| httpRequest.isSecure();
+
+		ResponseCookie accessCookie = ResponseCookie.from("ACCESS_TOKEN", token.getAccessToken()).httpOnly(true)
+				.secure(isHttps).sameSite(isHttps ? "None" : "Lax").path("/").maxAge(token.getAccessTokenExpiresIn())
+				.build();
+
+		ResponseCookie refreshCookie = ResponseCookie.from("REFRESH_TOKEN", token.getRefreshToken()).httpOnly(true)
+				.secure(isHttps).sameSite(isHttps ? "None" : "Lax").path("/").maxAge(60 * 60 * 24 * 14).build();
+
+		httpResponse.addHeader("Set-Cookie", accessCookie.toString());
+		httpResponse.addHeader("Set-Cookie", refreshCookie.toString());
+
+		String clientIp = extractClientIp(httpRequest);
+		String userAgent = httpRequest.getHeader("User-Agent");
+		loginHistoryService.recordSuccess(userId, "RESTORE", clientIp, userAgent);
+
+		return ApiResponse.success(
+		        Map.of(
+		                "restored", true,
+		                "userId", userId,
+		                "accessToken", token.getAccessToken(),
+		                "refreshToken", token.getRefreshToken(),
+		                "accessTokenExpiresIn", token.getAccessTokenExpiresIn()
+		        )
+		);
 	}
 
 }

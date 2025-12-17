@@ -19,4 +19,6 @@ public interface AuthService {
 	TokenResponse verifyLoginOtp(OtpLoginVerifyRequest request);
 
 	TokenResponse verifyLoginBackupCode(BackupCodeLoginRequest request);
+	
+	TokenResponse issueToken(String userId);
 }

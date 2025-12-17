@@ -60,6 +60,7 @@ public class SecurityConfig {
 								"/api/auth/refresh",
 								"/api/auth/verify-email",
 								"/api/auth/unlock",
+								 "/api/auth/restore",
 								"/api/community/**")
 				.permitAll()
 				.requestMatchers(
