@@ -1,6 +1,7 @@
 package com.moa.service.user.impl;
 
 import java.io.File;
+import java.time.LocalDateTime;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
@@ -26,8 +27,9 @@ import com.moa.common.exception.ErrorCode;
 import com.moa.dao.admin.AdminDao;
 import com.moa.dao.oauth.OAuthAccountDao;
 import com.moa.dao.user.EmailVerificationDao;
-import com.moa.dao.user.UserDao;
 import com.moa.dao.user.UserCardDao;
+import com.moa.dao.user.UserDao;
+import com.moa.domain.EmailVerification;
 import com.moa.domain.OAuthAccount;
 import com.moa.domain.User;
 import com.moa.domain.enums.UserStatus;
@@ -186,29 +188,31 @@ public class UserServiceImpl implements UserService {
 		String encodedPassword = isSocial ? passwordEncoder.encode(UUID.randomUUID().toString())
 				: passwordEncoder.encode(request.getPassword());
 
-		User user = User.builder()
-				.userId(userId)
-				.password(encodedPassword)
-				.nickname(request.getNickname())
-				.phone(request.getPhone())
-				.role("USER")
-				.status(isSocial ? UserStatus.ACTIVE : UserStatus.PENDING)
-				.provider(isSocial ? request.getProvider() : null)
-				.ci(request.getCi())
-				.build();
+		User user = User.builder().userId(userId).password(encodedPassword).nickname(request.getNickname())
+				.phone(request.getPhone()).role("USER").status(isSocial ? UserStatus.ACTIVE : UserStatus.PENDING)
+				.provider(isSocial ? request.getProvider() : null).ci(request.getCi()).build();
 
 		userDao.insertUser(user);
 
 		if (isSocial) {
-			OAuthAccount account = OAuthAccount
-					.builder()
-					.oauthId(UUID.randomUUID().toString())
-					.provider(request.getProvider())
-					.providerUserId(request.getProviderUserId())
-					.userId(userId).build();
+			OAuthAccount account = OAuthAccount.builder().oauthId(UUID.randomUUID().toString())
+					.provider(request.getProvider()).providerUserId(request.getProviderUserId()).userId(userId).build();
 
 			oauthAccountService.addOAuthAccount(account);
+			return UserResponse.from(user);
 		}
+
+		String token = UUID.randomUUID().toString();
+		LocalDateTime expiresAt = LocalDateTime.now().plusMinutes(30);
+
+		emailVerificationDao.expirePreviousTokens(userId);
+
+		EmailVerification verification = EmailVerification.builder().userId(userId).token(token).expiresAt(expiresAt)
+				.build();
+
+		emailVerificationDao.insert(verification);
+
+		emailService.sendSignupVerificationEmail(userId, user.getNickname(), token);
 
 		return UserResponse.from(user);
 	}
@@ -224,12 +228,8 @@ public class UserServiceImpl implements UserService {
 
 		TokenResponse token = jwtProvider.generateToken(authentication);
 
-		return Map.of(
-				"signupType", "SOCIAL",
-				"user", user,
-				"accessToken", token.getAccessToken(),
-				"refreshToken", token.getRefreshToken(),
-				"accessTokenExpiresIn", token.getAccessTokenExpiresIn());
+		return Map.of("signupType", "SOCIAL", "user", user, "accessToken", token.getAccessToken(), "refreshToken",
+				token.getRefreshToken(), "accessTokenExpiresIn", token.getAccessTokenExpiresIn());
 
 	}
 
@@ -261,20 +261,20 @@ public class UserServiceImpl implements UserService {
 
 				String dbColumn = null;
 				switch (property) {
-					case "lastLoginDate":
-						dbColumn = "u.LAST_LOGIN_DATE";
-						break;
-					case "regDate":
-						dbColumn = "u.REG_DATE";
-						break;
-					case "userId":
-						dbColumn = "u.USER_ID";
-						break;
-					case "status":
-						dbColumn = "u.USER_STATUS";
-						break;
-					default:
-						continue;
+				case "lastLoginDate":
+					dbColumn = "u.LAST_LOGIN_DATE";
+					break;
+				case "regDate":
+					dbColumn = "u.REG_DATE";
+					break;
+				case "userId":
+					dbColumn = "u.USER_ID";
+					break;
+				case "status":
+					dbColumn = "u.USER_STATUS";
+					break;
+				default:
+					continue;
 				}
 
 				if (dbColumn != null) {
@@ -350,8 +350,7 @@ public class UserServiceImpl implements UserService {
 
 	@Override
 	public UserResponse updateUser(String userId, UserUpdateRequest request) {
-		User user = userDao.findByUserId(userId)
-				.orElseThrow(() -> new BusinessException(ErrorCode.USER_NOT_FOUND));
+		User user = userDao.findByUserId(userId).orElseThrow(() -> new BusinessException(ErrorCode.USER_NOT_FOUND));
 
 		ensureNotBlocked(user);
 
@@ -361,30 +360,17 @@ public class UserServiceImpl implements UserService {
 			}
 		}
 		String profileImage = user.getProfileImage();
-		if (request.getProfileImage() != null &&
-				request.getProfileImage().startsWith("/uploads/")) {
+		if (request.getProfileImage() != null && request.getProfileImage().startsWith("/uploads/")) {
 			profileImage = request.getProfileImage();
 		}
 
-		User updated = User.builder()
-				.userId(user.getUserId())
-				.password(user.getPassword())
-				.nickname(request.getNickname())
-				.phone(request.getPhone())
-				.profileImage(profileImage)
-				.agreeMarketing(request.isAgreeMarketing())
-				.role(user.getRole())
-				.status(user.getStatus())
-				.regDate(user.getRegDate())
-				.ci(user.getCi())
-				.passCertifiedAt(user.getPassCertifiedAt())
-				.lastLoginDate(user.getLastLoginDate())
-				.loginFailCount(user.getLoginFailCount())
-				.unlockScheduledAt(user.getUnlockScheduledAt())
-				.deleteDate(user.getDeleteDate())
-				.deleteType(user.getDeleteType())
-				.deleteDetail(user.getDeleteDetail())
-				.build();
+		User updated = User.builder().userId(user.getUserId()).password(user.getPassword())
+				.nickname(request.getNickname()).phone(request.getPhone()).profileImage(profileImage)
+				.agreeMarketing(request.isAgreeMarketing()).role(user.getRole()).status(user.getStatus())
+				.regDate(user.getRegDate()).ci(user.getCi()).passCertifiedAt(user.getPassCertifiedAt())
+				.lastLoginDate(user.getLastLoginDate()).loginFailCount(user.getLoginFailCount())
+				.unlockScheduledAt(user.getUnlockScheduledAt()).deleteDate(user.getDeleteDate())
+				.deleteType(user.getDeleteType()).deleteDetail(user.getDeleteDetail()).build();
 
 		userDao.updateUserProfile(updated);
 
@@ -397,8 +383,7 @@ public class UserServiceImpl implements UserService {
 			throw new BusinessException(ErrorCode.BAD_REQUEST, "업로드할 파일이 없습니다.");
 		}
 
-		User user = userDao.findByUserId(userId)
-				.orElseThrow(() -> new BusinessException(ErrorCode.USER_NOT_FOUND));
+		User user = userDao.findByUserId(userId).orElseThrow(() -> new BusinessException(ErrorCode.USER_NOT_FOUND));
 
 		ensureNotBlocked(user);
 

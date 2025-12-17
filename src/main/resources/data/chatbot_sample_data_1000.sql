@@ -56,7 +56,7 @@ BEGIN
                 SET v_keywords = '기타,문의,사용방법,도움말';
         END CASE;
 
-        INSERT INTO chatbot_knowledge
+        INSERT INTO CHATBOT_KNOWLEDGE
             (category, title, question, answer, keywords)
         VALUES (v_category, v_title, v_question, v_answer, v_keywords);
 
@@ -65,5 +65,6 @@ BEGIN
 END //
 DELIMITER ;
 
-TRUNCATE TABLE chatbot_knowledge;
+TRUNCATE TABLE CHATBOT_KNOWLEDGE;
 CALL seed_chatbot_knowledge(1000);
+

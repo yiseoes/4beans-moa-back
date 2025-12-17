@@ -34,20 +34,18 @@ public class SignupRestController {
 		return ApiResponse.success(userService.check(request));
 	}
 
+
 	@PostMapping("/add")
 	public ApiResponse<?> add(@RequestBody @Valid UserCreateRequest request) {
 
-		if (request.getProvider() != null && !request.getProvider().isBlank()) {
-			return ApiResponse.success(
-					userService.addUserAndLogin(request)
-			);
+		boolean isSocial = request.getProvider() != null && !request.getProvider().isBlank()
+				&& request.getProviderUserId() != null && !request.getProviderUserId().isBlank();
+
+		if (isSocial) {
+			return ApiResponse.success(userService.addUserAndLogin(request));
 		}
-		return ApiResponse.success(
-				Map.of(
-					"signupType", "NORMAL",
-					"user", userService.addUser(request)
-				)
-		);
+
+		return ApiResponse.success(Map.of("signupType", "NORMAL", "user", userService.addUser(request)));
 	}
 
 
