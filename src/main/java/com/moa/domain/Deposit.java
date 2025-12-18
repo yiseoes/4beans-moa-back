@@ -31,4 +31,5 @@ public class Deposit {
 
     private String tossPaymentKey;
     private String orderId;
+    private String paymentMethod; // 추가
 }

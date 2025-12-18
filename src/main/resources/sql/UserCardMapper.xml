@@ -28,4 +28,15 @@
         DELETE FROM USER_CARD WHERE USER_ID = #{userId}
     </delete>
 
+    <update id="updateUserCard" parameterType="com.moa.domain.UserCard">
+        UPDATE USER_CARD
+        SET
+            BILLING_KEY = #{billingKey},
+            CARD_COMPANY = #{cardCompany},
+            CARD_NUMBER = #{cardNumber},
+            REG_DATE = NOW()
+        WHERE
+            USER_ID = #{userId}
+    </update>
+
 </mapper>

@@ -21,5 +21,8 @@ public class PaymentRequest {
 	@NotBlank(message = "결제 수단은 필수입니다.")
 	private String paymentMethod;
 	private String tossPaymentKey;
+	private String authKey; // 토스 빌링키 발급용 인증키
 	private String orderId;
+	@Builder.Default
+	private boolean useExistingCard = false; // 기존 카드를 사용할지 여부
 }

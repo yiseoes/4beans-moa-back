@@ -58,6 +58,7 @@ public enum ErrorCode {
 	PAYMENT_FAILED("PAY500", "결제 처리 중 오류가 발생했습니다.", HttpStatus.INTERNAL_SERVER_ERROR),
 	BILLING_KEY_NOT_FOUND("PAY404", "빌링키를 찾을 수 없습니다.", HttpStatus.NOT_FOUND),
 	INVALID_PAYMENT_AMOUNT("PAY400", "결제 금액이 올바르지 않습니다.", HttpStatus.BAD_REQUEST),
+    INVALID_PAYMENT_REQUEST("PAY400", "유효하지 않은 결제 요청입니다.", HttpStatus.BAD_REQUEST),
 
 	// Payment Retry Errors
 	PAYMENT_RETRY_FAILED("PAY501", "결제 재시도에 실패했습니다.", HttpStatus.INTERNAL_SERVER_ERROR),

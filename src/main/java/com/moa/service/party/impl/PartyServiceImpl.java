@@ -4,6 +4,7 @@ import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -15,11 +16,13 @@ import com.moa.dao.party.PartyDao;
 import com.moa.dao.partymember.PartyMemberDao;
 import com.moa.dao.product.ProductDao;
 import com.moa.dao.user.UserDao;
+import com.moa.dao.user.UserCardDao;
 import com.moa.domain.Deposit;
 import com.moa.domain.Party;
 import com.moa.domain.PartyMember;
 import com.moa.domain.Product;
 import com.moa.domain.User;
+import com.moa.domain.UserCard;
 import com.moa.domain.enums.MemberStatus;
 import com.moa.domain.enums.PartyStatus;
 import com.moa.domain.enums.PushCodeType;
@@ -51,11 +54,12 @@ public class PartyServiceImpl implements PartyService {
 	private final com.moa.service.payment.TossPaymentService tossPaymentService;
 	private final com.moa.service.refund.RefundRetryService refundRetryService;
 	private final UserDao userDao;
+	private final UserCardDao userCardDao;
 
 	public PartyServiceImpl(PartyDao partyDao, PartyMemberDao partyMemberDao, ProductDao productDao,
 			DepositService depositService, PaymentService paymentService, PushService pushService,
 			com.moa.service.payment.TossPaymentService tossPaymentService,
-			com.moa.service.refund.RefundRetryService refundRetryService, UserDao userDao) {
+			com.moa.service.refund.RefundRetryService refundRetryService, UserDao userDao, UserCardDao userCardDao) {
 		this.partyDao = partyDao;
 		this.partyMemberDao = partyMemberDao;
 		this.productDao = productDao;
@@ -65,6 +69,7 @@ public class PartyServiceImpl implements PartyService {
 		this.tossPaymentService = tossPaymentService;
 		this.refundRetryService = refundRetryService;
 		this.userDao = userDao;
+		this.userCardDao = userCardDao;
 	}
 
 	@Override
@@ -101,28 +106,44 @@ public class PartyServiceImpl implements PartyService {
 	}
 
 	@Override
+	@SuppressWarnings("unchecked")
 	public PartyDetailResponse processLeaderDeposit(Integer partyId, String userId, PaymentRequest paymentRequest) {
-
 		Party party = partyDao.findById(partyId).orElseThrow(() -> new BusinessException(ErrorCode.PARTY_NOT_FOUND));
 
 		if (!party.getPartyLeaderId().equals(userId)) {
 			throw new BusinessException(ErrorCode.NOT_PARTY_LEADER);
 		}
-
 		if (party.getPartyStatus() != PartyStatus.PENDING_PAYMENT) {
 			throw new BusinessException(ErrorCode.INVALID_PARTY_STATUS);
 		}
 
+		// 1. 빌링키 발급 및 저장 (authKey는 PaymentRequest를 통해 전달받는다고 가정)
+		Map<String, Object> billingData = tossPaymentService.issueBillingKey(paymentRequest.getAuthKey(), userId);
+		String billingKey = (String) billingData.get("billingKey");
+		Map<String, Object> cardInfo = (Map<String, Object>) billingData.get("card");
+
+		UserCard newUserCard = UserCard.builder()
+				.userId(userId)
+				.billingKey(billingKey)
+				.cardCompany((String) cardInfo.get("company"))
+				.cardNumber((String) cardInfo.get("number"))
+				.regDate(LocalDateTime.now())
+				.build();
+		userCardDao.findByUserId(userId).ifPresentOrElse(
+				existingCard -> userCardDao.updateUserCard(newUserCard),
+				() -> userCardDao.insertUserCard(newUserCard));
+
+		// 2. 빌링키로 보증금 결제
+		int depositAmount = party.getMonthlyFee() * party.getMaxMembers();
+		String orderId = "DEPOSIT_" + partyId + "_" + userId + "_" + System.currentTimeMillis();
+		String paymentKey = tossPaymentService.payWithBillingKey(billingKey, orderId, depositAmount, "MOA 파티장 보증금", userId);
+
+		// 3. Deposit 기록 생성 (새로운 createDeposit 메소드 호출)
+		depositService.createDeposit(partyId, partyMemberDao.findByPartyIdAndUserId(partyId, userId).get().getPartyMemberId(), userId, depositAmount, paymentKey, orderId, "CARD");
+
+		// 4. 상태 변경
 		PartyMember leaderMember = partyMemberDao.findByPartyIdAndUserId(partyId, userId)
 				.orElseThrow(() -> new BusinessException(ErrorCode.PARTY_MEMBER_NOT_FOUND));
-		int depositAmount = party.getMonthlyFee() * party.getMaxMembers();
-
-		depositService.createDeposit(partyId, leaderMember.getPartyMemberId(), userId, depositAmount, paymentRequest);
-
-		String targetMonth = party.getStartDate().format(DateTimeFormatter.ofPattern("yyyy-MM"));
-		paymentService.createDepositPayment(partyId, leaderMember.getPartyMemberId(), userId, depositAmount,
-				targetMonth, paymentRequest);
-
 		leaderMember.setMemberStatus(MemberStatus.ACTIVE);
 		partyMemberDao.updatePartyMember(leaderMember);
 		party.setPartyStatus(PartyStatus.RECRUITING);
@@ -204,70 +225,142 @@ public class PartyServiceImpl implements PartyService {
 	@Override
 	public PartyMemberResponse joinParty(Integer partyId, String userId, PaymentRequest paymentRequest) {
 
+		// 1. 초기 검증 및 파티/멤버 기본 정보 설정
 		Party party = partyDao.findById(partyId).orElseThrow(() -> new BusinessException(ErrorCode.PARTY_NOT_FOUND));
 
 		if (party.getPartyStatus() != PartyStatus.RECRUITING) {
 			throw new BusinessException(ErrorCode.PARTY_NOT_RECRUITING);
 		}
-
 		if (party.getPartyLeaderId().equals(userId)) {
 			throw new BusinessException(ErrorCode.LEADER_CANNOT_JOIN);
 		}
-
 		partyMemberDao.findByPartyIdAndUserId(partyId, userId).ifPresent(member -> {
 			throw new BusinessException(ErrorCode.ALREADY_JOINED);
 		});
 
+		// 정원 증가 시도. 실패하면 파티 정원 초과
 		int updatedRows = partyDao.incrementCurrentMembers(partyId);
 		if (updatedRows == 0) {
-
 			throw new BusinessException(ErrorCode.PARTY_FULL);
 		}
 
+		// 파티 멤버 임시 생성 (결제 실패 시 트랜잭션 롤백에 의존)
+		PartyMember partyMember = PartyMember.builder()
+				.partyId(partyId)
+				.userId(userId) // userId 필드 추가가 필요할 수 있음
+				.memberRole("MEMBER")
+				.memberStatus(MemberStatus.PENDING_PAYMENT)
+				.joinDate(LocalDateTime.now())
+				.build();
+		partyMemberDao.insertPartyMember(partyMember); // 먼저 멤버를 생성하여 ID를 확보 (트랜잭션에 포함)
+
+		// 2. 빌링키 처리 로직
+		UserCard userCard;
+		String billingKey;
+		String cardCompany = null;
+		String cardNumber = null; // 마지막 4자리
+
+		Optional<UserCard> existingUserCard = userCardDao.findByUserId(userId);
+
+		if (paymentRequest.getAuthKey() != null && !paymentRequest.getAuthKey().isEmpty()) {
+			// Case A: 새 카드 등록 (authKey로 빌링키 발급 및 저장/업데이트)
+			Map<String, Object> billingKeyIssueResponse = tossPaymentService.issueBillingKey(paymentRequest.getAuthKey(), userId);
+			billingKey = (String) billingKeyIssueResponse.get("billingKey");
+			Map<String, Object> cardInfo = (Map<String, Object>) billingKeyIssueResponse.get("card");
+			cardCompany = (String) cardInfo.get("company");
+			cardNumber = (String) cardInfo.get("number"); // 카드 마지막 4자리
+
+			UserCard newOrUpdatedCard = UserCard.builder()
+					.userId(userId)
+					.billingKey(billingKey)
+					.cardCompany(cardCompany)
+					.cardNumber(cardNumber)
+					.regDate(LocalDateTime.now())
+					.build();
+
+			if (existingUserCard.isPresent()) {
+				userCardDao.updateUserCard(newOrUpdatedCard); // 기존 카드 정보 업데이트
+				log.info("사용자 {}의 카드 정보 업데이트 완료 (billingKey: {})", userId, billingKey);
+			} else {
+				userCardDao.insertUserCard(newOrUpdatedCard); // 새 카드 정보 삽입
+				log.info("사용자 {}의 카드 정보 등록 완료 (billingKey: {})", userId, billingKey);
+			}
+			userCard = newOrUpdatedCard;
+
+		} else if (paymentRequest.isUseExistingCard()) {
+			// Case B: 기존 카드 사용
+			userCard = existingUserCard.orElseThrow(() -> new BusinessException(ErrorCode.BILLING_KEY_NOT_FOUND, "저장된 카드 정보가 없습니다."));
+			billingKey = userCard.getBillingKey();
+			log.info("사용자 {}의 기존 카드 정보 사용 (billingKey: {})", userId, billingKey);
+		} else {
+			// 유효하지 않은 요청 (authKey도 없고 기존 카드 사용 플래그도 없음)
+			throw new BusinessException(ErrorCode.INVALID_PAYMENT_REQUEST, "유효한 결제 요청 정보가 없습니다.");
+		}
+
+		// 3. 빌링키로 첫 결제 실행 (보증금 + 월회비)
 		int fee = party.getMonthlyFee();
+		int depositAmount = fee; // 보증금은 월회비와 동일
+		int initialSubscriptionFee = fee; // 첫 달 월회비
+		int totalAmount = depositAmount + initialSubscriptionFee;
 
-		PartyMember partyMember = PartyMember.builder().partyId(partyId).userId(userId).memberRole("MEMBER")
-				.memberStatus(MemberStatus.PENDING_PAYMENT).joinDate(LocalDateTime.now()).build();
-		partyMemberDao.insertPartyMember(partyMember);
-
-		int totalAmount = fee * 2;
+		String orderId = "PARTY_JOIN_" + party.getPartyId() + "_" + userId + "_" + System.currentTimeMillis();
+		String paymentKey;
 		try {
-			tossPaymentService.confirmPayment(paymentRequest.getTossPaymentKey(), paymentRequest.getOrderId(),
-					totalAmount);
+			paymentKey = tossPaymentService.payWithBillingKey(
+					billingKey,
+					orderId,
+					totalAmount,
+					"MOA 파티 가입 (보증금 + 첫 달 구독료)",
+					userId // customerKey
+			);
+			log.info("Toss 빌링키 결제 성공: paymentKey={}, orderId={}", paymentKey, orderId);
 		} catch (Exception e) {
-
-			partyDao.decrementCurrentMembers(partyId);
-			partyMemberDao.deletePartyMember(partyMember.getPartyMemberId());
-			log.error("Toss 결제 실패, 정원 복구: partyId={}, error={}", partyId, e.getMessage());
+			// 결제 실패 시, 트랜잭션 롤백 (partyMember 생성, currentMembers 증가 등 모두 롤백)
+			log.error("Toss 빌링키 결제 실패: partyId={}, userId={}, error={}", partyId, userId, e.getMessage());
 			throw e;
 		}
 
-		try {
-			depositService.createDepositWithoutConfirm(partyId, partyMember.getPartyMemberId(), userId, fee,
-					paymentRequest);
-		} catch (Exception e) {
-
-			partyDao.decrementCurrentMembers(partyId);
-			Deposit pendingDeposit = Deposit.builder().depositId(null).partyId(partyId).userId(userId)
-					.depositAmount(fee).tossPaymentKey(paymentRequest.getTossPaymentKey()).build();
-			refundRetryService.recordCompensation(pendingDeposit, "Toss 성공 후 Deposit 생성 실패");
-			log.error("Deposit 생성 실패, 보상 트랜잭션 등록: partyId={}", partyId);
-			throw e;
-		}
-
+		// 4. DEPOSIT 및 PAYMENT 기록 (두 가지 타입으로 분리)
 		String targetMonth = party.getStartDate().format(DateTimeFormatter.ofPattern("yyyy-MM"));
-		paymentService.createInitialPaymentWithoutConfirm(partyId, partyMember.getPartyMemberId(), userId, fee,
-				targetMonth, paymentRequest);
 
+		// 보증금 기록
+		depositService.createDeposit(
+				partyId,
+				partyMember.getPartyMemberId(),
+				userId,
+				depositAmount,
+				paymentKey, // paymentKey 전달
+				orderId,
+				"CARD" // 결제 수단
+		);
+		log.info("보증금 기록 완료: partyId={}, userId={}, amount={}", partyId, userId, depositAmount);
+
+		// 첫 달 월회비 기록
+		paymentService.createInitialSubscriptionPayment(
+				partyId,
+				partyMember.getPartyMemberId(),
+				userId,
+				initialSubscriptionFee,
+				targetMonth,
+				paymentKey, // paymentKey 전달
+				orderId,
+				"CARD" // 결제 수단
+		);
+		log.info("첫 달 월회비 기록 완료: partyId={}, userId={}, amount={}", partyId, userId, initialSubscriptionFee);
+
+		// 5. 파티 멤버 최종 활성화 및 푸시 알림
 		partyMember.setMemberStatus(MemberStatus.ACTIVE);
 		partyMemberDao.updatePartyMember(partyMember);
+		log.info("파티 멤버 {} 활성화 완료: partyId={}", userId, partyId);
 
+		// 파티 정원 확인 및 상태 변경
 		Party updatedParty = partyDao.findById(partyId)
 				.orElseThrow(() -> new BusinessException(ErrorCode.PARTY_NOT_FOUND));
 
 		if (updatedParty.getCurrentMembers() >= updatedParty.getMaxMembers()) {
 			partyDao.updatePartyStatus(partyId, PartyStatus.ACTIVE);
 			safeSendPush(() -> sendPartyStartPushToAllMembers(partyId, updatedParty));
+			log.info("파티 {} 활성화 완료 (정원 충족)", partyId);
 		}
 
 		safeSendPush(() -> sendPartyJoinPush(userId, getUserNickname(userId), party));
