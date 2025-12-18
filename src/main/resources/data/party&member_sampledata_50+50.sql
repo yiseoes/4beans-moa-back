@@ -1,12 +1,14 @@
 -- ============================================
 -- MOA 파티 및 파티 멤버 추가 샘플 데이터
--- 작성일: 2025.12.10
--- 내용: PARTY (ID 6~55), PARTY_MEMBER (ID 21~)
--- 비고: START_DATE NOT NULL 제약조건 준수 (모집중/결제대기 상태는 시작 예정일 입력)
+-- Version: 5.3 (쿠팡플레이 관련 데이터 제거 완료)
+-- 작성일: 2025.12.18
+-- 내용: PARTY (ID 6~55 중 쿠팡 제외), PARTY_MEMBER (ID 21~ 중 쿠팡 제외)
+-- 비고: START_DATE NOT NULL 제약조건 준수
 -- ============================================
 
 -- --------------------------------------------
--- 1. PARTY 테이블 데이터 (50건)
+-- 1. PARTY 테이블 데이터
+-- (쿠팡플레이 상품 ID 6, 14를 사용하는 파티 ID 24, 42, 44 제거됨)
 -- --------------------------------------------
 INSERT INTO PARTY (PARTY_ID, PRODUCT_ID, PARTY_LEADER_ID, PARTY_STATUS, MAX_MEMBERS, CURRENT_MEMBERS, MONTHLY_FEE, OTT_ID, OTT_PASSWORD, ACCOUNT_ID, REG_DATE, START_DATE, END_DATE) VALUES
 (6, 1, 'user001@gmail.com', 'ACTIVE', 4, 4, 4250, 'moa_act_6', 'safe_pass!', 1, '2024-11-21 10:00:00', '2024-11-23 10:00:00', NULL),
@@ -27,7 +29,7 @@ INSERT INTO PARTY (PARTY_ID, PRODUCT_ID, PARTY_LEADER_ID, PARTY_STATUS, MAX_MEMB
 (21, 12, 'user016@gmail.com', 'RECRUITING', 4, 1, 82500, NULL, NULL, 16, '2024-12-08 10:00:00', '2024-12-15 10:00:00', NULL),
 (22, 13, 'user017@naver.com', 'RECRUITING', 4, 3, 3475, NULL, NULL, 17, '2024-12-08 10:00:00', '2024-12-15 10:00:00', NULL),
 (23, 11, 'user018@daum.net', 'RECRUITING', 4, 3, 12500, NULL, NULL, 18, '2024-12-04 10:00:00', '2024-12-11 10:00:00', NULL),
-(24, 14, 'user019@gmail.com', 'ACTIVE', 4, 4, 4150, 'moa_act_24', 'safe_pass!', 19, '2024-11-18 10:00:00', '2024-11-20 10:00:00', NULL),
+-- (Party 24 - 쿠팡플레이 Sports Pass 삭제됨)
 (25, 4, 'user020@naver.com', 'ACTIVE', 4, 4, 3475, 'moa_act_25', 'safe_pass!', 20, '2024-11-20 10:00:00', '2024-11-22 10:00:00', NULL),
 (26, 9, 'user001@gmail.com', 'ACTIVE', 4, 4, 750, 'moa_act_26', 'safe_pass!', 1, '2024-11-22 10:00:00', '2024-11-24 10:00:00', NULL),
 (27, 13, 'user002@naver.com', 'ACTIVE', 4, 4, 3475, 'moa_act_27', 'safe_pass!', 2, '2024-11-30 10:00:00', '2024-12-02 10:00:00', NULL),
@@ -45,9 +47,9 @@ INSERT INTO PARTY (PARTY_ID, PRODUCT_ID, PARTY_LEADER_ID, PARTY_STATUS, MAX_MEMB
 (39, 7, 'user014@naver.com', 'ACTIVE', 4, 4, 2725, 'moa_act_39', 'safe_pass!', 14, '2024-11-26 10:00:00', '2024-11-28 10:00:00', NULL),
 (40, 3, 'user015@daum.net', 'RECRUITING', 4, 3, 1975, NULL, NULL, 15, '2024-12-07 10:00:00', '2024-12-14 10:00:00', NULL),
 (41, 21, 'user016@gmail.com', 'ACTIVE', 4, 4, 4750, 'moa_act_41', 'safe_pass!', 16, '2024-11-18 10:00:00', '2024-11-20 10:00:00', NULL),
-(42, 14, 'user017@naver.com', 'RECRUITING', 4, 2, 4150, NULL, NULL, 17, '2024-12-05 10:00:00', '2024-12-12 10:00:00', NULL),
+-- (Party 42 - 쿠팡플레이 Sports Pass 삭제됨)
 (43, 9, 'user018@daum.net', 'RECRUITING', 4, 3, 750, NULL, NULL, 18, '2024-12-04 10:00:00', '2024-12-11 10:00:00', NULL),
-(44, 6, 'user019@gmail.com', 'EXPIRED', 4, 4, 1972, 'moa_exp_44', 'expired123', 19, '2024-09-08 10:00:00', '2024-09-10 10:00:00', NULL),
+-- (Party 44 - 쿠팡플레이 WOW 삭제됨)
 (45, 11, 'user020@naver.com', 'ACTIVE', 4, 4, 12500, 'moa_act_45', 'safe_pass!', 20, '2024-11-24 10:00:00', '2024-11-26 10:00:00', NULL),
 (46, 7, 'user001@gmail.com', 'ACTIVE', 4, 4, 2725, 'moa_act_46', 'safe_pass!', 1, '2024-11-29 10:00:00', '2024-12-01 10:00:00', NULL),
 (47, 13, 'user002@naver.com', 'RECRUITING', 4, 1, 3475, NULL, NULL, 2, '2024-12-08 10:00:00', '2024-12-15 10:00:00', NULL),
@@ -62,6 +64,7 @@ INSERT INTO PARTY (PARTY_ID, PRODUCT_ID, PARTY_LEADER_ID, PARTY_STATUS, MAX_MEMB
 
 -- --------------------------------------------
 -- 2. PARTY_MEMBER 테이블 데이터
+-- (쿠팡플레이 파티 ID 24, 42, 44에 속한 멤버 데이터 제거됨)
 -- --------------------------------------------
 INSERT INTO PARTY_MEMBER (PARTY_MEMBER_ID, PARTY_ID, USER_ID, MEMBER_ROLE, MEMBER_STATUS, JOIN_DATE, WITHDRAW_DATE) VALUES
 (21, 6, 'user001@gmail.com', 'LEADER', 'ACTIVE', '2024-11-21 10:00:00', NULL),
@@ -111,10 +114,7 @@ INSERT INTO PARTY_MEMBER (PARTY_MEMBER_ID, PARTY_ID, USER_ID, MEMBER_ROLE, MEMBE
 (65, 23, 'user018@daum.net', 'LEADER', 'ACTIVE', '2024-12-04 10:00:00', NULL),
 (66, 23, 'user008@naver.com', 'MEMBER', 'ACTIVE', '2024-12-04 10:30:00', NULL),
 (67, 23, 'user019@gmail.com', 'MEMBER', 'ACTIVE', '2024-12-04 10:30:00', NULL),
-(68, 24, 'user019@gmail.com', 'LEADER', 'ACTIVE', '2024-11-18 10:00:00', NULL),
-(69, 24, 'user010@gmail.com', 'MEMBER', 'ACTIVE', '2024-11-18 10:30:00', NULL),
-(70, 24, 'user011@naver.com', 'MEMBER', 'ACTIVE', '2024-11-18 10:30:00', NULL),
-(71, 24, 'user020@naver.com', 'MEMBER', 'ACTIVE', '2024-11-18 10:30:00', NULL),
+-- (Party 24 관련 멤버 68~71 삭제됨)
 (72, 25, 'user020@naver.com', 'LEADER', 'ACTIVE', '2024-11-20 10:00:00', NULL),
 (73, 25, 'user016@gmail.com', 'MEMBER', 'ACTIVE', '2024-11-20 10:30:00', NULL),
 (74, 25, 'user010@gmail.com', 'MEMBER', 'ACTIVE', '2024-11-20 10:30:00', NULL),
@@ -172,15 +172,11 @@ INSERT INTO PARTY_MEMBER (PARTY_MEMBER_ID, PARTY_ID, USER_ID, MEMBER_ROLE, MEMBE
 (126, 41, 'user001@gmail.com', 'MEMBER', 'ACTIVE', '2024-11-18 10:30:00', NULL),
 (127, 41, 'user011@naver.com', 'MEMBER', 'ACTIVE', '2024-11-18 10:30:00', NULL),
 (128, 41, 'user002@naver.com', 'MEMBER', 'ACTIVE', '2024-11-18 10:30:00', NULL),
-(129, 42, 'user017@naver.com', 'LEADER', 'ACTIVE', '2024-12-05 10:00:00', NULL),
-(130, 42, 'user004@gmail.com', 'MEMBER', 'ACTIVE', '2024-12-05 10:30:00', NULL),
+-- (Party 42 관련 멤버 129~130 삭제됨)
 (131, 43, 'user018@daum.net', 'LEADER', 'ACTIVE', '2024-12-04 10:00:00', NULL),
 (132, 43, 'user010@gmail.com', 'MEMBER', 'ACTIVE', '2024-12-04 10:30:00', NULL),
 (133, 43, 'user001@gmail.com', 'MEMBER', 'ACTIVE', '2024-12-04 10:30:00', NULL),
-(134, 44, 'user019@gmail.com', 'LEADER', 'ACTIVE', '2024-09-08 10:00:00', NULL),
-(135, 44, 'user010@gmail.com', 'MEMBER', 'ACTIVE', '2024-09-08 10:30:00', NULL),
-(136, 44, 'user014@naver.com', 'MEMBER', 'ACTIVE', '2024-09-08 10:30:00', NULL),
-(137, 44, 'user005@naver.com', 'MEMBER', 'ACTIVE', '2024-09-08 10:30:00', NULL),
+-- (Party 44 관련 멤버 134~137 삭제됨)
 (138, 45, 'user020@naver.com', 'LEADER', 'ACTIVE', '2024-11-24 10:00:00', NULL),
 (139, 45, 'user016@gmail.com', 'MEMBER', 'ACTIVE', '2024-11-24 10:30:00', NULL),
 (140, 45, 'user017@naver.com', 'MEMBER', 'ACTIVE', '2024-11-24 10:30:00', NULL),
