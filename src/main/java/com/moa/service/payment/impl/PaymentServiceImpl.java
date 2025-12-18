@@ -59,9 +59,20 @@ public class PaymentServiceImpl implements PaymentService {
 
 	private static final int MAX_RETRY_ATTEMPTS = 4;
 
+
+
+
+
 	@Override
-	public Payment createInitialPayment(Integer partyId, Integer partyMemberId, String userId, Integer amount,
-			String targetMonth, PaymentRequest request) {
+	public Payment createInitialSubscriptionPayment(
+			Integer partyId,
+			Integer partyMemberId,
+			String userId,
+			Integer amount,
+			String targetMonth,
+			String paymentKey,
+			String orderId,
+			String paymentMethod) {
 
 		if (isDuplicatePayment(partyMemberId, targetMonth)) {
 			throw new BusinessException(ErrorCode.DUPLICATE_PAYMENT);
@@ -71,87 +82,30 @@ public class PaymentServiceImpl implements PaymentService {
 			throw new BusinessException(ErrorCode.INVALID_PAYMENT_AMOUNT);
 		}
 
-		if (paymentDao.findByOrderId(request.getOrderId()).isPresent()) {
-			return paymentDao.findByOrderId(request.getOrderId()).get();
-		}
-
-		tossPaymentService.confirmPayment(request.getTossPaymentKey(), request.getOrderId(), amount);
-
-		Payment payment = Payment.builder().partyId(partyId).partyMemberId(partyMemberId).userId(userId)
-				.paymentType("INITIAL").paymentAmount(amount).paymentStatus(PaymentStatus.COMPLETED)
-				.paymentMethod(request.getPaymentMethod()).paymentDate(LocalDateTime.now())
-				.tossPaymentKey(request.getTossPaymentKey()).orderId(request.getOrderId()).targetMonth(targetMonth)
-				.cardNumber("UNAVAILABLE").cardCompany("TOSS").build();
-
-		paymentDao.insertPayment(payment);
-
-		return payment;
-	}
-
-	@Override
-	public Payment createMonthlyPayment(Integer partyId, Integer partyMemberId, String userId, Integer amount,
-			String targetMonth) {
-
-		if (isDuplicatePayment(partyMemberId, targetMonth)) {
-			throw new BusinessException(ErrorCode.DUPLICATE_PAYMENT);
-		}
-
-		UserCard userCard = userCardDao.findByUserId(userId)
-				.orElseThrow(() -> new BusinessException(ErrorCode.BILLING_KEY_NOT_FOUND));
-
-		String orderId = "MONTHLY_" + partyId + "_" + partyMemberId + "_" + System.currentTimeMillis();
-
-		String paymentKey = tossPaymentService.payWithBillingKey(userCard.getBillingKey(), orderId, amount,
-				"MOA 월 구독료 (" + targetMonth + ")", userId);
-
-		Payment payment = Payment.builder().partyId(partyId).partyMemberId(partyMemberId).userId(userId)
-				.paymentType("MONTHLY").paymentAmount(amount).paymentStatus(PaymentStatus.COMPLETED)
-				.paymentMethod("CARD").paymentDate(LocalDateTime.now()).targetMonth(targetMonth)
-				.tossPaymentKey(paymentKey).orderId(orderId).cardNumber(userCard.getCardNumber())
-				.cardCompany(userCard.getCardCompany()).build();
+		Payment payment = Payment.builder()
+				.partyId(partyId)
+				.partyMemberId(partyMemberId)
+				.userId(userId)
+				.paymentType("INITIAL_FEE") // INITIAL_FEE 타입으로 변경
+				.paymentAmount(amount)
+				.paymentStatus(PaymentStatus.COMPLETED)
+				.paymentMethod(paymentMethod)
+				.paymentDate(LocalDateTime.now())
+				.tossPaymentKey(paymentKey)
+				.orderId(orderId)
+				.targetMonth(targetMonth)
+				.cardNumber("UNAVAILABLE") // Toss Payment API 응답에서 카드 정보 추출 필요 (현재는 UNAVAILABLE)
+				.cardCompany("TOSS")       // Toss Payment API 응답에서 카드 정보 추출 필요 (현재는 TOSS)
+				.build();
 
 		paymentDao.insertPayment(payment);
 
 		return payment;
 	}
 
-	@Override
-	public Payment createDepositPayment(Integer partyId, Integer partyMemberId, String userId, Integer amount,
-			String targetMonth, PaymentRequest request) {
 
-		Payment payment = Payment.builder().partyId(partyId).partyMemberId(partyMemberId).userId(userId)
-				.paymentType("DEPOSIT").paymentAmount(amount).paymentStatus(PaymentStatus.COMPLETED)
-				.paymentMethod(request.getPaymentMethod()).paymentDate(LocalDateTime.now())
-				.tossPaymentKey(request.getTossPaymentKey()).orderId(request.getOrderId()).targetMonth(targetMonth)
-				.cardNumber("UNAVAILABLE").cardCompany("TOSS").build();
 
-		paymentDao.insertPayment(payment);
 
-		return payment;
-	}
-
-	@Override
-	public Payment createInitialPaymentWithoutConfirm(Integer partyId, Integer partyMemberId, String userId,
-			Integer amount, String targetMonth, PaymentRequest request) {
-
-		if (isDuplicatePayment(partyMemberId, targetMonth)) {
-			throw new BusinessException(ErrorCode.DUPLICATE_PAYMENT);
-		}
-
-		if (amount <= 0) {
-			throw new BusinessException(ErrorCode.INVALID_PAYMENT_AMOUNT);
-		}
-
-		Payment payment = Payment.builder().partyId(partyId).partyMemberId(partyMemberId).userId(userId)
-				.paymentType("INITIAL").paymentAmount(amount).paymentStatus(PaymentStatus.COMPLETED)
-				.paymentMethod(request.getPaymentMethod()).paymentDate(LocalDateTime.now())
-				.tossPaymentKey(request.getTossPaymentKey()).orderId(request.getOrderId()).targetMonth(targetMonth)
-				.cardNumber("UNAVAILABLE").cardCompany("TOSS").build();
-
-		paymentDao.insertPayment(payment);
-
-		return payment;
-	}
 
 	@Override
 	@Transactional(readOnly = true)

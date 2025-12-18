@@ -88,3 +88,7 @@ src/main/resources/keystore/
 
 ### 6. API-Key Secret ###
 application-secret.properties
+
+### 7. Test Cache Files ###
+# jqwik property-based testing database (local cache)
+.jqwik-database

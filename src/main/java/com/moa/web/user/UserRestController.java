@@ -1,9 +1,11 @@
 package com.moa.web.user;
 
 import java.util.Map;
+import java.util.Optional;
 
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -188,7 +190,9 @@ public class UserRestController {
 	}
 
 	@PostMapping("/me/billing-key/issue")
-	public ApiResponse<Map<String, Object>> issueBillingKey(@RequestBody Map<String, String> request) {
+	@Transactional
+	@SuppressWarnings("unchecked")
+	public ApiResponse<UserCard> issueBillingKey(@RequestBody Map<String, String> request) {
 		String userId = getCurrentUserId();
 		if (userId == null) {
 			throw new BusinessException(ErrorCode.UNAUTHORIZED, "로그인이 필요합니다.");
@@ -201,7 +205,42 @@ public class UserRestController {
 
 		Map<String, Object> billingData = tossPaymentService.issueBillingKey(authKey, userId);
 
-		return ApiResponse.success(billingData);
+		String billingKey = (String) billingData.get("billingKey");
+		// 토스페이먼츠 응답에서 cardCompany는 최상위에 있음
+		String cardCompany = (String) billingData.get("cardCompany");
+		// cardNumber도 최상위 또는 card 객체에서 가져올 수 있음
+		String cardNumber = (String) billingData.get("cardNumber");
+		if (cardNumber == null) {
+			Map<String, Object> cardInfo = (Map<String, Object>) billingData.get("card");
+			if (cardInfo != null) {
+				cardNumber = (String) cardInfo.get("number");
+			}
+		}
+
+		UserCard newUserCard = UserCard.builder()
+				.userId(userId)
+				.billingKey(billingKey)
+				.cardCompany(cardCompany != null ? cardCompany : "카드")
+				.cardNumber(cardNumber != null ? cardNumber : "****")
+				.regDate(java.time.LocalDateTime.now())
+				.build();
+
+		try {
+			Optional<UserCard> existingUserCard = userCardDao.findByUserId(userId);
+			if (existingUserCard.isPresent()) {
+				userCardDao.updateUserCard(newUserCard);
+			} else {
+				userCardDao.insertUserCard(newUserCard);
+			}
+		} catch (Exception e) {
+			// DB 저장 실패 시 로깅 및 예외 처리
+			// 참고: 빌링키는 토스페이먼츠에 이미 발급됨. 수동 처리 필요할 수 있음.
+			System.err.println("카드 정보 저장 실패 - userId: " + userId + ", error: " + e.getMessage());
+			throw new BusinessException(ErrorCode.INTERNAL_ERROR,
+					"카드 정보 저장에 실패했습니다. 다시 시도해주세요.");
+		}
+
+		return ApiResponse.success(newUserCard);
 	}
 
 	@PostMapping("/me/oauth/connect")

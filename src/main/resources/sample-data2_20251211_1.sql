@@ -1481,13 +1481,13 @@ INSERT INTO `PRODUCT` (`PRODUCT_ID`, `CATEGORY_ID`, `PRODUCT_NAME`, `PRODUCT_STA
    (4, 2, '유튜브 프리미엄', 'ACTIVE', 13900, '/uploads/product-image/YouTube_logo.png', NULL),
    (5, 1, 'Chat GPT Plus', 'ACTIVE', 29000, '/uploads/product-image/ChatGPT_logo.png', NULL),
    -- (6번 쿠팡플레이 삭제)
-   (7, 2, '티빙 스탠다드', 'ACTIVE', 10900, '/uploads/product-image/Tving_logo.jpg', NULL),
-   (8, 2, '웨이브 프리미엄', 'ACTIVE', 13900, '/uploads/product-image/Wavve_logo.png', NULL),
-   (9, 4, 'Naver 멤버십 1개월권', 'ACTIVE', 3000, '/uploads/product-image/NaverPlus_logo.png', NULL),
-   (10, 4, 'Naver 멤버십 12개월권', 'ACTIVE', 30000, '/uploads/product-image/NaverPlus_logo.png', NULL),
-   (11, 1, 'Chat GPT Pro', 'ACTIVE', 50000, '/uploads/product-image/ChatGPT_logo.png', NULL),
-   (12, 1, 'Google AI Ultra', 'ACTIVE', 330000, '/uploads/product-image/Google_AI_Logo.png', NULL),
-   (13, 2, 'Disney+ Premium', 'ACTIVE', 13900, '/uploads/product-image/Disney_plus_logo.png', NULL),
+   (7, 2, '티빙 스탠다드', 'ACTIVE', 10900, '/uploads/product-image/tving_logo.png', NULL),
+   (8, 2, '웨이브 프리미엄', 'ACTIVE', 13900, '/uploads/product-image/wavve_logo.png', NULL),
+   (9, 4, 'Naver 멤버십 1개월권', 'ACTIVE', 3000, '/uploads/product-image/naverplus_logo.png', NULL),
+   (10, 4, 'Naver 멤버십 12개월권', 'ACTIVE', 30000, '/uploads/product-image/naverplus_logo.png', NULL),
+   (11, 1, 'Chat GPT Pro', 'ACTIVE', 50000, '/uploads/product-image/chatgpt_logo.png', NULL),
+   (12, 1, 'Google AI Ultra', 'ACTIVE', 330000, '/uploads/product-image/googleai_Logo.png', NULL),
+   (13, 2, 'Disney+ Premium', 'ACTIVE', 13900, '/uploads/product-image/disneyplus_logo.png', NULL),
    -- (14번 쿠팡플레이 삭제)
    (15, 3, 'Skillshare Monthly', 'ACTIVE', 20600, '/uploads/product-image/Skillshare_logo.png', NULL),
    (16, 3, 'LinkedIn Learning Monthly', 'ACTIVE', 58900, '/uploads/product-image/LinkedIn_Learning_Logo.png', NULL),
@@ -1496,7 +1496,40 @@ INSERT INTO `PRODUCT` (`PRODUCT_ID`, `CATEGORY_ID`, `PRODUCT_NAME`, `PRODUCT_STA
    (19, 2, 'Netflix Standard', 'ACTIVE', 14500, '/uploads/product-image/Netflix_logo.png', NULL),
    (20, 2, 'Netflix Premium', 'ACTIVE', 19000, '/uploads/product-image/Netflix_logo.png', NULL),
    (21, 2, 'Netflix', 'ACTIVE', 19000, '/uploads/product-image/Netflix_logo.png', NULL);
-   
+
+   (15, 3, 'Skillshare Monthly', 'ACTIVE', 20600, '/uploads/product-image/skillshare_logo.png', NULL),
+   (16, 3, 'LinkedIn Learning Monthly', 'ACTIVE', 58900, '/uploads/product-image/linkedinlearning_logo.png', NULL),
+   (17, 2, 'Disney+ + TVING Bundle', 'ACTIVE', 18000, '/uploads/product-image/disneyplus_logo.png', NULL),
+   (18, 2, 'Netflix Basic', 'ACTIVE', 9500, '/uploads/product-image/netflix_logo.png', NULL),
+   (19, 2, 'Netflix Standard', 'ACTIVE', 14500, '/uploads/product-image/netflix_logo.png', NULL),
+   (20, 2, 'Netflix Premium', 'ACTIVE', 19000, '/uploads/product-image/netflix_logo.png', NULL),
+   (21, 2, 'Netflix', 'ACTIVE', 19000, '/uploads/product-image/netflix_logo.png', NULL);
+
+-- CHATBOT_KNOWLEDGE: 챗봇 지식 베이스 데이터
+INSERT INTO CHATBOT_KNOWLEDGE (CATEGORY, TITLE, QUESTION, ANSWER, KEYWORDS) VALUES 
+('구독', '구독상품 안내', '구독상품이 뭐가 있나요?', 'MoA에서는 OTT, 음악, 게임 등 다양한 구독상품을 제공해요.', '구독,상품,OTT,음악,게임'),
+('결제', '결제 수단 변경', '결제 카드를 바꾸고 싶어요', '마이페이지 > 결제 관리에서 카드 추가/변경이 가능해요.', '결제,카드,변경,마이페이지'),
+('파티', '파티 가입 방법', '파티는 어떻게 가입하나요?', '원하는 OTT 서비스를 선택한 후 모집 중인 파티에 가입 신청을 하시면 됩니다.', '파티,가입,방법'),
+('보증금', '보증금 환불 시기', '보증금은 언제 돌려받나요?', '파티 정상 종료 시 7일 이내에 보증금이 환불됩니다.', '보증금,환불,시기'),
+('정산', '정산 일정', '정산은 언제 되나요?', '매월 5일에 전월 정산금이 등록하신 계좌로 입금됩니다.', '정산,일정,입금');
+
+-- 1536차원 더미 임베딩 생성
+SET SQL_SAFE_UPDATES = 0;
+DROP PROCEDURE IF EXISTS make_dummy_embedding;
+DELIMITER //
+CREATE PROCEDURE make_dummy_embedding()
+BEGIN
+    DECLARE i INT DEFAULT 0;
+    SET @vec = JSON_ARRAY();
+    WHILE i < 1536 DO
+        SET @vec = JSON_ARRAY_APPEND(@vec, '$', 0.0);
+        SET i = i + 1;
+    END WHILE;
+END //
+DELIMITER ;
+CALL make_dummy_embedding();
+UPDATE CHATBOT_KNOWLEDGE SET EMBEDDING = @vec WHERE EMBEDDING IS NULL AND ID > 0;
+
 -- OAUTH_ACCOUNT: 소셜 로그인 연동 (10명)
 INSERT INTO OAUTH_ACCOUNT (
     OAUTH_ID,

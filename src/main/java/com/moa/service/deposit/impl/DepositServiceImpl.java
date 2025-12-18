@@ -46,68 +46,17 @@ public class DepositServiceImpl implements DepositService {
     private final PushService pushService;
     private final ProductDao productDao;
 
+	// 기존 PaymentRequest를 받는 createDeposit 메소드를 이 새로운 메소드로 대체
     @Override
     public Deposit createDeposit(
             Integer partyId,
             Integer partyMemberId,
             String userId,
             Integer amount,
-            PaymentRequest request) {
+            String paymentKey,
+            String orderId,
+            String paymentMethod) {
 
-        if (partyDao.findById(partyId).isEmpty()) {
-            throw new BusinessException(ErrorCode.PARTY_NOT_FOUND);
-        }
-        if (amount <= 0) {
-            throw new BusinessException(ErrorCode.INVALID_PAYMENT_AMOUNT);
-        }
-
-        Deposit pendingDeposit = Deposit.builder()
-                .partyId(partyId)
-                .partyMemberId(partyMemberId)
-                .userId(userId)
-                .depositType("SECURITY")
-                .depositAmount(amount)
-                .depositStatus(DepositStatus.PENDING)
-                .transactionDate(LocalDateTime.now())
-                .paymentDate(LocalDateTime.now())
-                .tossPaymentKey(request.getTossPaymentKey())
-                .orderId(request.getOrderId())
-                .build();
-        depositDao.insertDeposit(pendingDeposit);
-        log.info("PENDING 상태 Deposit 생성: depositId={}", pendingDeposit.getDepositId());
-
-        try {
-            tossPaymentService.confirmPayment(
-                    request.getTossPaymentKey(),
-                    request.getOrderId(),
-                    amount);
-        } catch (Exception e) {
-            depositDao.deleteById(pendingDeposit.getDepositId());
-            log.error("Toss 결제 실패, PENDING 삭제: depositId={}", pendingDeposit.getDepositId());
-            throw e;
-        }
-        try {
-            pendingDeposit.setDepositStatus(DepositStatus.PAID);
-            pendingDeposit.setPaymentDate(LocalDateTime.now());
-            depositDao.updateDeposit(pendingDeposit);
-            log.info("PAID 상태로 업데이트 완료: depositId={}", pendingDeposit.getDepositId());
-        } catch (Exception e) {
-            refundRetryService.recordCompensation(pendingDeposit, "Toss 성공 후 DB 업데이트 실패");
-            log.error("DB 업데이트 실패, 보상 트랜잭션 등록: depositId={}", pendingDeposit.getDepositId());
-            throw e;
-        }
-
-        return pendingDeposit;
-    }
-
-    @Override
-    public Deposit createDepositWithoutConfirm(
-            Integer partyId,
-            Integer partyMemberId,
-            String userId,
-            Integer amount,
-            PaymentRequest request) {
-    	
         if (partyDao.findById(partyId).isEmpty()) {
             throw new BusinessException(ErrorCode.PARTY_NOT_FOUND);
         }
@@ -122,16 +71,20 @@ public class DepositServiceImpl implements DepositService {
                 .userId(userId)
                 .depositType("SECURITY")
                 .depositAmount(amount)
-                .depositStatus(DepositStatus.PAID)
+                .depositStatus(DepositStatus.PAID) // 결제가 이미 확인되었으므로 직접 PAID
                 .paymentDate(LocalDateTime.now())
                 .transactionDate(LocalDateTime.now())
-                .tossPaymentKey(request.getTossPaymentKey())
-                .orderId(request.getOrderId())
+                .tossPaymentKey(paymentKey)
+                .orderId(orderId)
+                .paymentMethod(paymentMethod)
                 .build();
         depositDao.insertDeposit(deposit);
+        log.info("PAID 상태 Deposit 생성 (빌링키 결제): depositId={}, userId={}, amount={}", deposit.getDepositId(), userId, amount);
 
         return deposit;
     }
+
+
 
     @Override
     @Transactional(readOnly = true)

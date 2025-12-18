@@ -5,15 +5,10 @@ import java.util.List;
 import com.moa.domain.Deposit;
 import com.moa.domain.Party;
 import com.moa.dto.deposit.response.DepositResponse;
-import com.moa.dto.payment.request.PaymentRequest;
 
 public interface DepositService {
 
-	Deposit createDeposit(Integer partyId, Integer partyMemberId, String userId, Integer amount,
-			PaymentRequest request);
-
-	Deposit createDepositWithoutConfirm(Integer partyId, Integer partyMemberId, String userId, Integer amount,
-			PaymentRequest request);
+	Deposit createDeposit(Integer partyId, Integer partyMemberId, String userId, Integer amount, String paymentKey, String orderId, String paymentMethod);
 
 	DepositResponse getDepositDetail(Integer depositId);
 

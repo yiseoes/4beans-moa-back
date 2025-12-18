@@ -27,74 +27,20 @@ public interface PaymentService {
          * @param request       결제 요청 정보
          * @return 생성된 결제 정보
          */
-        Payment createInitialPayment(
+        Payment createInitialSubscriptionPayment( // 이름 변경
                         Integer partyId,
                         Integer partyMemberId,
                         String userId,
                         Integer amount,
                         String targetMonth,
-                        PaymentRequest request);
+                        String paymentKey, // 변경
+                        String orderId,    // 변경
+                        String paymentMethod); // 변경
 
         /**
-         * 월별 결제 생성 (스케줄러용)
+         * 결제 상세 정보 조회
          *
-         * @param partyId       파티 ID
-         * @param partyMemberId 파티 멤버 ID
-         * @param userId        사용자 ID
-         * @param amount        결제 금액
-         * @param targetMonth   대상 월 (YYYY-MM)
-         * @return 생성된 결제 정보
-         */
-        Payment createMonthlyPayment(
-                        Integer partyId,
-                        Integer partyMemberId,
-                        String userId,
-                        Integer amount,
-                        String targetMonth);
-
-        /**
-         * 보증금 결제 생성 (방장 파티 생성 시)
-         *
-         * @param partyId       파티 ID
-         * @param partyMemberId 파티 멤버 ID
-         * @param userId        사용자 ID
-         * @param amount        결제 금액
-         * @param targetMonth   대상 월 (YYYY-MM)
-         * @param request       결제 요청 정보
-         * @return 생성된 결제 정보
-         */
-        Payment createDepositPayment(
-                        Integer partyId,
-                        Integer partyMemberId,
-                        String userId,
-                        Integer amount,
-                        String targetMonth,
-                        PaymentRequest request);
-
-        /**
-         * 첫 달 결제 기록 생성 (Toss 승인 없이 DB 기록만)
-         * joinParty에서 사용 - 보증금과 함께 결제되었으므로 별도 승인 불필요
-         *
-         * @param partyId       파티 ID
-         * @param partyMemberId 파티 멤버 ID
-         * @param userId        사용자 ID
-         * @param amount        결제 금액
-         * @param targetMonth   대상 월 (YYYY-MM)
-         * @param request       결제 요청 정보
-         * @return 생성된 결제 정보
-         */
-        Payment createInitialPaymentWithoutConfirm(
-                        Integer partyId,
-                        Integer partyMemberId,
-                        String userId,
-                        Integer amount,
-                        String targetMonth,
-                        PaymentRequest request);
-
-        /**
-         * 월별 결제 생성 (스케줄러용)
-         *
-         * @param partyId 파티 ID
+         * @param paymentId 결제 ID
          * @return 결제 상세 정보
          */
         PaymentDetailResponse getPaymentDetail(Integer paymentId);

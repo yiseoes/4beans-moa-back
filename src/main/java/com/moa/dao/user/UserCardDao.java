@@ -14,4 +14,5 @@ public interface UserCardDao {
     Optional<UserCard> findByUserId(@Param("userId") String userId);
 
     int deleteUserCard(@Param("userId") String userId);
+    int updateUserCard(UserCard userCard); // 추가
 }
