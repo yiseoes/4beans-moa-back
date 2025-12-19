@@ -86,7 +86,7 @@ public class SecurityConfig {
 						.permitAll()
 						.requestMatchers(HttpMethod.GET, "/api/community/notice/**").permitAll()
 						.requestMatchers(HttpMethod.GET, "/api/community/faq/**").permitAll()
-
+						.requestMatchers(HttpMethod.GET, "/api/push/subscribe").authenticated()
 						.requestMatchers(HttpMethod.POST, "/api/signup/pass/**").permitAll()
 						.requestMatchers(HttpMethod.GET, "/api/signup/pass/**").permitAll()
 						
@@ -133,7 +133,7 @@ public class SecurityConfig {
 	    config.setAllowedOriginPatterns(origins);
 
 	    config.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"));
-	    config.setAllowedHeaders(List.of("Authorization", "Content-Type", "Refresh-Token", "*"));
+	    config.setAllowedHeaders(List.of("Authorization", "Content-Type", "Refresh-Token", "Last-Event-ID", "*"));
 	    config.setAllowCredentials(true);
 
 	    UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
