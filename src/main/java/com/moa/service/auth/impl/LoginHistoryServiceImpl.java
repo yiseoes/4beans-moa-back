@@ -1,6 +1,7 @@
 package com.moa.service.auth.impl;
 
-import java.time.LocalDateTime;
+import java.time.OffsetDateTime;
+import java.time.ZoneOffset;
 import java.util.List;
 import java.util.stream.Collectors;
 
@@ -32,9 +33,15 @@ public class LoginHistoryServiceImpl implements LoginHistoryService {
 			return;
 		}
 
-		LoginHistory history = LoginHistory.builder().userId(userId.toLowerCase()).loginAt(LocalDateTime.now())
-				.success(1)
-				.loginIp(loginIp).userAgent(userAgent).failReason(null).loginType(loginType).build();
+		LoginHistory history = LoginHistory.builder()
+			    .userId(userId.toLowerCase())
+			    .loginAt(OffsetDateTime.now(ZoneOffset.UTC))
+			    .success(1)
+			    .loginIp(loginIp)
+			    .userAgent(userAgent)
+			    .failReason(null)
+			    .loginType(loginType)
+			    .build();
 
 		loginHistoryDao.insert(history);
 	}
@@ -46,14 +53,14 @@ public class LoginHistoryServiceImpl implements LoginHistoryService {
 	    }
 
 	    LoginHistory history = LoginHistory.builder()
-	        .userId(userId.toLowerCase())
-	        .loginAt(LocalDateTime.now())
-	        .success(0)
-	        .loginIp(loginIp)
-	        .userAgent(userAgent)
-	        .failReason(failReason)
-	        .loginType(loginType)
-	        .build();
+	    	    .userId(userId.toLowerCase())
+	    	    .loginAt(OffsetDateTime.now(ZoneOffset.UTC))
+	    	    .success(0)
+	    	    .loginIp(loginIp)
+	    	    .userAgent(userAgent)
+	    	    .failReason(failReason)
+	    	    .loginType(loginType)
+	    	    .build();
 
 	    loginHistoryDao.insert(history);
 	}

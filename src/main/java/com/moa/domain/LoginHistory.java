@@ -1,6 +1,6 @@
 package com.moa.domain;
 
-import java.time.LocalDateTime;
+import java.time.OffsetDateTime;
 
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -17,7 +17,7 @@ public class LoginHistory {
 
 	private Long id;
 	private String userId;
-	private LocalDateTime loginAt;
+	private OffsetDateTime loginAt;
 	private Integer success;
 	private String loginIp;
 	private String userAgent;

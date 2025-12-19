@@ -1,6 +1,6 @@
 package com.moa.dto.user.response;
 
-import java.time.LocalDateTime;
+import java.time.OffsetDateTime;
 
 import com.moa.domain.LoginHistory;
 
@@ -11,7 +11,7 @@ import lombok.Getter;
 @Builder
 public class LoginHistoryResponse {
 
-	private LocalDateTime loginAt;
+	private OffsetDateTime loginAt;
 	private boolean success;
 	private String loginIp;
 	private String userAgent;
