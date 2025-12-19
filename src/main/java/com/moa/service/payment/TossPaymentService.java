@@ -116,10 +116,11 @@ public class TossPaymentService {
         // 1. 헤더 설정 (Basic Auth)
         HttpHeaders headers = createHeaders();
 
-        // 2. 바디 설정
+        // 2. 바디 설정 - Toss customerKey는 최소 2자 이상이어야 함
+        String formattedCustomerKey = "MOA_" + customerKey;
         Map<String, Object> body = Map.of(
                 "authKey", authKey,
-                "customerKey", customerKey);
+                "customerKey", formattedCustomerKey);
 
         HttpEntity<Map<String, Object>> request = new HttpEntity<>(body, headers);
 
@@ -170,12 +171,13 @@ public class TossPaymentService {
         // 1. 헤더 설정 (Basic Auth)
         HttpHeaders headers = createHeaders();
 
-        // 2. 바디 설정
+        // 2. 바디 설정 - Toss customerKey는 최소 2자 이상이어야 함
+        String formattedCustomerKey = "MOA_" + customerKey;
         Map<String, Object> body = Map.of(
                 "amount", amount,
                 "orderId", orderId,
                 "orderName", orderName,
-                "customerKey", customerKey);
+                "customerKey", formattedCustomerKey);
 
         HttpEntity<Map<String, Object>> request = new HttpEntity<>(body, headers);
 
