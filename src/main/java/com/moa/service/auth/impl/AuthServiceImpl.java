@@ -92,8 +92,6 @@ public class AuthServiceImpl implements AuthService {
 		if (otpEnabled) {
 			String otpToken = createOtpToken(user.getUserId());
 
-			loginHistoryService.recordSuccess(user.getUserId(), "PASSWORD_OTP_WAIT", null, null);
-
 			return LoginResponse.builder().otpRequired(true).otpToken(otpToken).build();
 		}
 
@@ -103,8 +101,6 @@ public class AuthServiceImpl implements AuthService {
 				List.of(new SimpleGrantedAuthority(user.getRole())));
 
 		TokenResponse token = jwtProvider.generateToken(authentication);
-
-		loginHistoryService.recordSuccess(user.getUserId(), "PASSWORD", null, null);
 
 		return LoginResponse.builder().otpRequired(false).accessToken(token.getAccessToken())
 				.refreshToken(token.getRefreshToken()).accessTokenExpiresIn(token.getAccessTokenExpiresIn()).build();
@@ -160,7 +156,6 @@ public class AuthServiceImpl implements AuthService {
 				List.of(new SimpleGrantedAuthority(user.getRole())));
 
 		TokenResponse token = jwtProvider.generateToken(authentication);
-		loginHistoryService.recordSuccess(userId, "OTP", null, null);
 
 		return token;
 	}

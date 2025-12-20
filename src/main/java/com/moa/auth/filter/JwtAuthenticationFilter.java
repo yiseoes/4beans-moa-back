@@ -53,6 +53,9 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 			if (StringUtils.hasText(jwt) && jwtProvider.validateToken(jwt)) {
 				Authentication authentication = jwtProvider.getAuthentication(jwt);
 				SecurityContextHolder.getContext().setAuthentication(authentication);
+
+				request.setAttribute("LOGIN_USER_ID", authentication.getName());
+				request.setAttribute("LOGIN_PROVIDER", jwtProvider.getProviderFromToken(jwt));
 			}
 		} catch (Exception e) {
 			log.warn("JWT authentication failed: {}", e.getMessage());
@@ -88,5 +91,4 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
 		return null;
 	}
-
 }

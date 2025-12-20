@@ -33,6 +33,7 @@ import lombok.extern.slf4j.Slf4j;
 public class JwtProvider {
 
 	private static final String AUTHORITIES_KEY = "auth";
+	private static final String PROVIDER_KEY = "provider";
 	private static final String BEARER_TYPE = "Bearer";
 
 	private final SecretKey secretKey;
@@ -42,15 +43,13 @@ public class JwtProvider {
 	public JwtProvider(@Value("${jwt.secret}") String secret,
 			@Value("${jwt.access-token-expiration-millis}") long accessTokenExpirationMillis,
 			@Value("${jwt.refresh-token-expiration-millis}") long refreshTokenExpirationMillis) {
-
 		byte[] keyBytes = Decoders.BASE64.decode(secret);
 		this.secretKey = Keys.hmacShaKeyFor(keyBytes);
 		this.accessTokenExpirationMillis = accessTokenExpirationMillis;
 		this.refreshTokenExpirationMillis = refreshTokenExpirationMillis;
 	}
 
-	public TokenResponse generateToken(Authentication authentication) {
-
+	public TokenResponse generateToken(Authentication authentication, String provider) {
 		String authorities = authentication.getAuthorities().stream().map(GrantedAuthority::getAuthority)
 				.collect(Collectors.joining(","));
 
@@ -59,21 +58,27 @@ public class JwtProvider {
 		Date refreshTokenExpiresIn = new Date(now + refreshTokenExpirationMillis);
 
 		String accessToken = Jwts.builder().setSubject(authentication.getName()).claim(AUTHORITIES_KEY, authorities)
+				.claim(PROVIDER_KEY, provider == null || provider.isBlank() ? "email" : provider)
 				.setExpiration(accessTokenExpiresIn).signWith(secretKey, SignatureAlgorithm.HS256).compact();
 
 		String refreshToken = Jwts.builder().setSubject(authentication.getName()).claim(AUTHORITIES_KEY, authorities)
+				.claim(PROVIDER_KEY, provider == null || provider.isBlank() ? "email" : provider)
 				.setExpiration(refreshTokenExpiresIn).signWith(secretKey, SignatureAlgorithm.HS256).compact();
 
 		return TokenResponse.builder().grantType(BEARER_TYPE).accessToken(accessToken).refreshToken(refreshToken)
 				.accessTokenExpiresIn(accessTokenExpiresIn.getTime()).build();
 	}
 
-	public TokenResponse refresh(String refreshToken) {
+	public TokenResponse generateToken(Authentication authentication) {
+		return generateToken(authentication, "email");
+	}
 
+	public TokenResponse refresh(String refreshToken) {
 		Claims claims = parseClaims(refreshToken);
 
 		String userId = claims.getSubject();
 		String authorities = claims.get(AUTHORITIES_KEY, String.class);
+		String provider = claims.get(PROVIDER_KEY, String.class);
 
 		if (userId == null || userId.isBlank()) {
 			throw new RuntimeException("리프레시 토큰에 사용자 정보가 없습니다.");
@@ -84,9 +89,11 @@ public class JwtProvider {
 		Date newRefreshTokenExpiresIn = new Date(now + refreshTokenExpirationMillis);
 
 		String newAccessToken = Jwts.builder().setSubject(userId).claim(AUTHORITIES_KEY, authorities)
+				.claim(PROVIDER_KEY, provider == null || provider.isBlank() ? "email" : provider)
 				.setExpiration(accessTokenExpiresIn).signWith(secretKey, SignatureAlgorithm.HS256).compact();
 
 		String newRefreshToken = Jwts.builder().setSubject(userId).claim(AUTHORITIES_KEY, authorities)
+				.claim(PROVIDER_KEY, provider == null || provider.isBlank() ? "email" : provider)
 				.setExpiration(newRefreshTokenExpiresIn).signWith(secretKey, SignatureAlgorithm.HS256).compact();
 
 		return TokenResponse.builder().grantType(BEARER_TYPE).accessToken(newAccessToken).refreshToken(newRefreshToken)
@@ -104,7 +111,6 @@ public class JwtProvider {
 				.stream(claims.get(AUTHORITIES_KEY).toString().split(",")).map(SimpleGrantedAuthority::new).toList();
 
 		UserDetails principal = new User(claims.getSubject(), "", authorities);
-
 		return new UsernamePasswordAuthenticationToken(principal, accessToken, authorities);
 	}
 
@@ -124,11 +130,21 @@ public class JwtProvider {
 		return false;
 	}
 
-	public Claims parseClaims(String accessToken) {
+	public Claims parseClaims(String token) {
 		try {
-			return Jwts.parserBuilder().setSigningKey(secretKey).build().parseClaimsJws(accessToken).getBody();
+			return Jwts.parserBuilder().setSigningKey(secretKey).build().parseClaimsJws(token).getBody();
 		} catch (ExpiredJwtException e) {
 			return e.getClaims();
+		}
+	}
+
+	public String getProviderFromToken(String token) {
+		try {
+			Claims claims = parseClaims(token);
+			String provider = claims.get(PROVIDER_KEY, String.class);
+			return provider == null || provider.isBlank() ? "email" : provider;
+		} catch (Exception e) {
+			return "email";
 		}
 	}
 }

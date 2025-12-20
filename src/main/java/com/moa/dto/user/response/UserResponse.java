@@ -33,17 +33,22 @@ public class UserResponse {
 	private String provider;
 
 	public static UserResponse from(User user) {
-		return from(user, null, false);
+		return from(user, null, false, null);
 	}
 
 	public static UserResponse from(User user, List<OAuthAccount> oauthAccounts) {
-		return from(user, oauthAccounts, false);
+		return from(user, oauthAccounts, false, null);
+	}
+
+	public static UserResponse from(User user, List<OAuthAccount> oauthAccounts, Boolean hasBillingKey) {
+		return from(user, oauthAccounts, hasBillingKey, null);
 	}
 
 	public static UserResponse from(
 	        User user,
 	        List<OAuthAccount> oauthAccounts,
-	        Boolean hasBillingKey
+	        Boolean hasBillingKey,
+	        String currentLoginProvider
 	) {
 	    List<OAuthConnectionResponse> connections = null;
 
@@ -53,7 +58,7 @@ public class UserResponse {
 	                .collect(Collectors.toList());
 	    }
 
-	    String loginProvider =
+	    String computed =
 	            oauthAccounts != null
 	                    ? oauthAccounts.stream()
 	                        .filter(o -> o.getReleaseDate() == null)
@@ -61,6 +66,11 @@ public class UserResponse {
 	                        .findFirst()
 	                        .orElse("email")
 	                    : "email";
+
+	    String finalProvider =
+	            (currentLoginProvider != null && !currentLoginProvider.isBlank())
+	                    ? currentLoginProvider
+	                    : computed;
 
 	    return UserResponse.builder()
 	            .userId(user.getUserId())
@@ -71,14 +81,13 @@ public class UserResponse {
 	            .role(user.getRole())
 	            .regDate(user.getRegDate() != null ? user.getRegDate().toLocalDate() : null)
 	            .lastLoginDate(user.getLastLoginDate() != null ? user.getLastLoginDate().toLocalDate() : null)
-	            .loginProvider(loginProvider)
+	            .loginProvider(finalProvider)
 	            .oauthConnections(connections)
 	            .agreeMarketing(user.getAgreeMarketing())
 	            .blacklisted(false)
 	            .otpEnabled(user.getOtpEnabled())
 	            .hasBillingKey(hasBillingKey)
+	            .provider(finalProvider)
 	            .build();
 	}
-
-
 }

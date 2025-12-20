@@ -104,7 +104,7 @@ public class UserServiceImpl implements UserService {
 		ensureNotBlocked(user);
 
 		if (!passwordEncoder.matches(currentPassword, user.getPassword())) {
-			throw new BusinessException(ErrorCode.UNAUTHORIZED, "현재 비밀번호가 올바르지 않습니다.");
+			throw new BusinessException(ErrorCode.INVALID_CURRENT_PASSWORD);
 		}
 	}
 

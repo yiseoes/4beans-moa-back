@@ -73,7 +73,9 @@ public class AuthRestController {
 				userId = response.getUserId();
 			}
 
-			loginHistoryService.recordSuccess(userId, loginType, clientIp, userAgent);
+			if (!response.isOtpRequired()) {
+				loginHistoryService.recordSuccess(userId, "PASSWORD", clientIp, userAgent);
+			}
 
 			if (!response.isOtpRequired()) {
 				ResponseCookie accessCookie = ResponseCookie.from("ACCESS_TOKEN", response.getAccessToken())
@@ -119,9 +121,21 @@ public class AuthRestController {
 
 	@PostMapping("/logout")
 	public ApiResponse<Void> logout(@RequestHeader(value = "Authorization", required = false) String accessToken,
-			@RequestHeader(value = "Refresh-Token", required = false) String refreshToken) {
-
+			@RequestHeader(value = "Refresh-Token", required = false) String refreshToken, HttpServletRequest request,
+			HttpServletResponse response) {
 		authService.logout(accessToken, refreshToken);
+
+		boolean isHttps = "https".equalsIgnoreCase(request.getHeader("X-Forwarded-Proto")) || request.isSecure();
+
+		ResponseCookie accessCookie = ResponseCookie.from("ACCESS_TOKEN", "").httpOnly(true).secure(isHttps)
+				.sameSite(isHttps ? "None" : "Lax").path("/").maxAge(0).build();
+
+		ResponseCookie refreshCookie = ResponseCookie.from("REFRESH_TOKEN", "").httpOnly(true).secure(isHttps)
+				.sameSite(isHttps ? "None" : "Lax").path("/").maxAge(0).build();
+
+		response.addHeader(HttpHeaders.SET_COOKIE, accessCookie.toString());
+		response.addHeader(HttpHeaders.SET_COOKIE, refreshCookie.toString());
+
 		return ApiResponse.success(null);
 	}
 
@@ -239,8 +253,7 @@ public class AuthRestController {
 		}
 
 		try {
-			userService.unlockByCertification(email, "__CHECK_ONLY__",
-					null);
+			userService.unlockByCertification(email, "__CHECK_ONLY__", null);
 		} catch (BusinessException e) {
 
 			if (e.getErrorCode() == ErrorCode.USER_NOT_FOUND) {

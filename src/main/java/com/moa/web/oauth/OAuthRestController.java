@@ -126,31 +126,34 @@ public class OAuthRestController {
 
 		if (oauth != null && oauth.getReleaseDate() == null) {
 
-			UsernamePasswordAuthenticationToken auth = new UsernamePasswordAuthenticationToken(oauth.getUserId(), null,
-					List.of(() -> "ROLE_USER"));
+		    UsernamePasswordAuthenticationToken auth =
+		            new UsernamePasswordAuthenticationToken(oauth.getUserId(), null, List.of(() -> "ROLE_USER"));
 
-			var token = jwtProvider.generateToken(auth);
+		    var token = jwtProvider.generateToken(auth, provider);
 
-			loginHistoryService.recordSuccess(oauth.getUserId(), "KAKAO", null, null);
+		    loginHistoryService.recordSuccess(oauth.getUserId(), "KAKAO", null, null);
 
-			ResponseCookie accessCookie = ResponseCookie.from("ACCESS_TOKEN", token.getAccessToken())
-			        .httpOnly(true)
-			        .secure(true)
-			        .sameSite("None")
-			        .path("/")
-			        .maxAge(token.getAccessTokenExpiresIn())
-			        .build();
-			ResponseCookie refreshCookie = ResponseCookie.from("REFRESH_TOKEN", token.getRefreshToken())
-			        .httpOnly(true)
-			        .secure(true)
-			        .sameSite("None")
-			        .path("/")
-			        .maxAge(60 * 60 * 24 * 14)
-			        .build();
+		    ResponseCookie accessCookie = ResponseCookie.from("ACCESS_TOKEN", token.getAccessToken())
+		            .httpOnly(true)
+		            .secure(true)
+		            .sameSite("None")
+		            .path("/")
+		            .maxAge(token.getAccessTokenExpiresIn())
+		            .build();
 
-			return ResponseEntity.status(HttpStatus.FOUND).header(HttpHeaders.SET_COOKIE, accessCookie.toString())
-					.header(HttpHeaders.SET_COOKIE, refreshCookie.toString())
-					.header(HttpHeaders.LOCATION, redirectBase + "?status=LOGIN").build();
+		    ResponseCookie refreshCookie = ResponseCookie.from("REFRESH_TOKEN", token.getRefreshToken())
+		            .httpOnly(true)
+		            .secure(true)
+		            .sameSite("None")
+		            .path("/")
+		            .maxAge(60 * 60 * 24 * 14)
+		            .build();
+
+		    return ResponseEntity.status(HttpStatus.FOUND)
+		            .header(HttpHeaders.SET_COOKIE, accessCookie.toString())
+		            .header(HttpHeaders.SET_COOKIE, refreshCookie.toString())
+		            .header(HttpHeaders.LOCATION, redirectBase + "?status=LOGIN")
+		            .build();
 		}
 
 		return redirect(redirectBase + "?status=NEED_REGISTER" + "&provider=kakao" + "&providerUserId=" + providerUserId
@@ -228,20 +231,32 @@ public class OAuthRestController {
 
 		if (exists != null && exists.getReleaseDate() == null) {
 
-			UsernamePasswordAuthenticationToken auth = new UsernamePasswordAuthenticationToken(exists.getUserId(), null,
-					List.of(() -> "ROLE_USER"));
+		    UsernamePasswordAuthenticationToken auth =
+		            new UsernamePasswordAuthenticationToken(exists.getUserId(), null, List.of(() -> "ROLE_USER"));
 
-			var jwt = jwtProvider.generateToken(auth);
+		    var jwt = jwtProvider.generateToken(auth, provider);
 
-			return ResponseEntity.status(HttpStatus.FOUND).header(HttpHeaders.LOCATION, redirectBase + "?status=LOGIN")
-					.header(HttpHeaders.SET_COOKIE,
-							ResponseCookie.from("ACCESS_TOKEN", jwt.getAccessToken()).httpOnly(true).secure(true)
-									.sameSite("None").path("/").maxAge(jwt.getAccessTokenExpiresIn()).build()
-									.toString())
-					.header(HttpHeaders.SET_COOKIE,
-							ResponseCookie.from("REFRESH_TOKEN", jwt.getRefreshToken()).httpOnly(true).secure(true)
-									.sameSite("None").path("/").maxAge(60 * 60 * 24 * 14).build().toString())
-					.build();
+		    return ResponseEntity.status(HttpStatus.FOUND)
+		            .header(HttpHeaders.LOCATION, redirectBase + "?status=LOGIN")
+		            .header(HttpHeaders.SET_COOKIE,
+		                    ResponseCookie.from("ACCESS_TOKEN", jwt.getAccessToken())
+		                            .httpOnly(true)
+		                            .secure(true)
+		                            .sameSite("None")
+		                            .path("/")
+		                            .maxAge(jwt.getAccessTokenExpiresIn())
+		                            .build()
+		                            .toString())
+		            .header(HttpHeaders.SET_COOKIE,
+		                    ResponseCookie.from("REFRESH_TOKEN", jwt.getRefreshToken())
+		                            .httpOnly(true)
+		                            .secure(true)
+		                            .sameSite("None")
+		                            .path("/")
+		                            .maxAge(60 * 60 * 24 * 14)
+		                            .build()
+		                            .toString())
+		            .build();
 		}
 
 		return redirect(redirectBase + "?status=NEED_REGISTER" + "&provider=google" + "&providerUserId="
@@ -291,14 +306,20 @@ public class OAuthRestController {
 
 		oauthService.connectOAuthAccount(user.getUserId(), provider, providerUserId);
 
-		UsernamePasswordAuthenticationToken authentication = new UsernamePasswordAuthenticationToken(user.getUserId(),
-				null, List.of(() -> "ROLE_USER"));
+		UsernamePasswordAuthenticationToken authentication =
+		        new UsernamePasswordAuthenticationToken(user.getUserId(), null, List.of(() -> "ROLE_USER"));
 
-		var tokenResponse = jwtProvider.generateToken(authentication);
+		var tokenResponse = jwtProvider.generateToken(authentication, provider);
 
-		return ApiResponse.success(Map.of("status", "LOGIN", "userId", user.getUserId(), "provider", provider,
-				"providerUserId", providerUserId, "accessToken", tokenResponse.getAccessToken(), "refreshToken",
-				tokenResponse.getRefreshToken(), "accessTokenExpiresIn", tokenResponse.getAccessTokenExpiresIn()));
+		return ApiResponse.success(Map.of(
+		        "status", "LOGIN",
+		        "userId", user.getUserId(),
+		        "provider", provider,
+		        "providerUserId", providerUserId,
+		        "accessToken", tokenResponse.getAccessToken(),
+		        "refreshToken", tokenResponse.getRefreshToken(),
+		        "accessTokenExpiresIn", tokenResponse.getAccessTokenExpiresIn()
+		));
 	}
 
 	@PostMapping("/release")

@@ -7,7 +7,9 @@ import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
@@ -66,12 +68,39 @@ public class UserRestController {
 	}
 
 	@GetMapping("/me")
-	public ApiResponse<UserResponse> me() {
+	public ApiResponse<UserResponse> me(jakarta.servlet.http.HttpServletRequest request) {
 		String userId = getCurrentUserId();
 		if (userId == null) {
 			return ApiResponse.success(null);
 		}
-		return ApiResponse.success(userService.getCurrentUser());
+
+		UserResponse res = userService.getCurrentUser();
+
+		String currentLoginProvider = (String) request.getAttribute("LOGIN_PROVIDER");
+		if (res != null && currentLoginProvider != null && !currentLoginProvider.isBlank()) {
+			res.setLoginProvider(currentLoginProvider);
+			res.setProvider(currentLoginProvider);
+		}
+
+		return ApiResponse.success(res);
+	}
+
+	@PutMapping("/me")
+	public ApiResponse<UserResponse> updateMePut(@RequestBody UserUpdateRequest request) {
+		String userId = getCurrentUserId();
+		if (userId == null) {
+			throw new BusinessException(ErrorCode.UNAUTHORIZED, "로그인이 필요합니다.");
+		}
+		return ApiResponse.success(userService.updateUser(userId, request));
+	}
+
+	@PatchMapping("/me")
+	public ApiResponse<UserResponse> updateMePatch(@RequestBody UserUpdateRequest request) {
+		String userId = getCurrentUserId();
+		if (userId == null) {
+			throw new BusinessException(ErrorCode.UNAUTHORIZED, "로그인이 필요합니다.");
+		}
+		return ApiResponse.success(userService.updateUser(userId, request));
 	}
 
 	@PostMapping("/delete")
