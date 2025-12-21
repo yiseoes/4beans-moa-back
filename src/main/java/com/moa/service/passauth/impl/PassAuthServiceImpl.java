@@ -44,37 +44,45 @@ public class PassAuthServiceImpl implements PassAuthService {
 
 	@Override
 	@SuppressWarnings("unchecked")
-	public Map<String, Object> verifyCertification(String impUid) throws Exception {
-		String token = getAccessToken();
-
-		HttpHeaders headers = new HttpHeaders();
-		headers.set("Authorization", "Bearer " + token);
-
-		HttpEntity<?> req = new HttpEntity<>(headers);
-
-		ResponseEntity<Map> res = restTemplate.exchange("https://api.iamport.kr/certifications/" + impUid,
-				HttpMethod.GET, req, Map.class);
-
-		Map<String, Object> body = (Map<String, Object>) res.getBody();
-		Map<String, Object> response = (Map<String, Object>) body.get("response");
-
-		Map<String, Object> customer = null;
-		if (response.containsKey("verifiedCustomer")) {
-			customer = (Map<String, Object>) response.get("verifiedCustomer");
+	public Map<String, Object> verifyCertification(String impUid) {
+		if (impUid == null || impUid.isBlank()) {
+			throw new IllegalArgumentException("imp_uid is required");
 		}
 
-		Map<String, Object> data = new HashMap<>();
-		data.put("phone", response.get("phone"));
+		try {
+			String token = getAccessToken();
 
-		if (customer != null) {
-			data.put("name", customer.get("name"));
-			data.put("ci", customer.get("ci"));
-		} else {
-			data.put("name", response.get("name"));
-			data.put("ci", response.get("unique_key"));
+			HttpHeaders headers = new HttpHeaders();
+			headers.set("Authorization", "Bearer " + token);
+
+			HttpEntity<?> req = new HttpEntity<>(headers);
+
+			ResponseEntity<Map> res = restTemplate.exchange("https://api.iamport.kr/certifications/" + impUid,
+					HttpMethod.GET, req, Map.class);
+
+			Map<String, Object> body = res.getBody();
+			if (body == null || body.get("response") == null) {
+				throw new RuntimeException("PASS 인증 응답이 비어있습니다.");
+			}
+
+			Map<String, Object> response = (Map<String, Object>) body.get("response");
+
+			Map<String, Object> data = new HashMap<>();
+			data.put("phone", response.get("phone"));
+			data.put("name", response.getOrDefault("name", ""));
+
+			if (response.containsKey("verifiedCustomer")) {
+				Map<String, Object> customer = (Map<String, Object>) response.get("verifiedCustomer");
+				data.put("ci", customer.get("ci"));
+			} else {
+				data.put("ci", response.get("unique_key"));
+			}
+
+			return data;
+
+		} catch (Exception e) {
+			throw new RuntimeException("PASS 인증 검증 실패", e);
 		}
-
-		return data;
 	}
 
 	@SuppressWarnings("unchecked")
