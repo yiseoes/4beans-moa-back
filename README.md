@@ -379,6 +379,27 @@ java -jar target/moa-0.0.1-SNAPSHOT.war --spring.profiles.active=prod
 | GET | `/api/product` | 상품 목록 조회 (OTT 서비스) |
 | GET | `/api/product/{productId}` | 상품 상세 조회 |
 
+### 🔔 Push 알림 (Notification)
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/api/push/subscribe` | SSE 실시간 알림 구독 |
+| GET | `/api/push/my` | 내 알림 목록 조회 |
+| GET | `/api/push/unread-count` | 읽지 않은 알림 수 |
+| PATCH | `/api/push/{pushId}/read` | 알림 읽음 처리 |
+| PATCH | `/api/push/read-all` | 전체 알림 읽음 처리 |
+| DELETE | `/api/push/{pushId}` | 알림 삭제 |
+
+### 커뮤니티 (Community)
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/api/community/notice` | 공지사항 목록 조회 |
+| GET | `/api/community/notice/{id}` | 공지사항 상세 조회 |
+| GET | `/api/community/faq` | FAQ 목록 조회 |
+| POST | `/api/community/inquiry` | 1:1 문의 등록 |
+| GET | `/api/community/inquiry/my` | 내 문의 목록 조회 |
+
 ---
 
 ## 📂 프로젝트 구조
