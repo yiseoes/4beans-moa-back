@@ -4,10 +4,13 @@
 
 **4beans 팀이 만든 OTT 구독을 함께 모아 쓰는 플랫폼**
 
+[![Deploy](https://img.shields.io/badge/Deploy-AWS-FF9900?logo=amazon-aws)](https://www.moamoa.cloud/)
 [![Java](https://img.shields.io/badge/Java-17-007396?logo=openjdk&logoColor=white)](https://openjdk.org/)
 [![Spring Boot](https://img.shields.io/badge/Spring%20Boot-3.5.8-6DB33F?logo=springboot&logoColor=white)](https://spring.io/projects/spring-boot)
 [![MySQL](https://img.shields.io/badge/MySQL-8.0-4479A1?logo=mysql&logoColor=white)](https://www.mysql.com/)
 [![Maven](https://img.shields.io/badge/Maven-3.x-C71A36?logo=apachemaven&logoColor=white)](https://maven.apache.org/)
+
+**🚀 Live Demo**: [https://www.moamoa.cloud/](https://www.moamoa.cloud/)
 
 </div>
 
@@ -64,14 +67,18 @@
 - 계정 잠금 정책 (5회 실패 시 자동 잠금)
 - 본인인증 연동 (PASS)
 
-### 🔔 알림 시스템
+### 🔔 Push 알림 시스템 (25종)
 - **SSE(Server-Sent Events)** 기반 실시간 알림
-- 결제, 정산, 파티 가입 등 이벤트 알림
-- 템플릿 기반 알림 메시지
+- **알림 25종**: 결제(성공/실패/재시도/예정), 정산(완료/대기), 파티(가입/탈퇴/해산), 보증금(결제/환불/차감), 문의(등록/답변), 공지 등
+- 트랜잭션 커밋 후 알림 발송 (데이터 정합성 보장)
+- `ConcurrentHashMap` 기반 멀티스레드 안전한 연결 관리
+- 알림 읽음/안읽음 처리, 알림 설정 (종류별 ON/OFF)
 
 ### 👥 커뮤니티
-- 공지사항, FAQ, 1:1 문의 게시판
-- 관리자 대시보드
+- **공지사항**: CRUD, 검색/필터, 페이징, 관리자 등록/수정
+- **FAQ**: 카테고리별 조회, 검색, 관리자 CRUD
+- **1:1 문의**: 등록/수정/삭제, 파일 첨부, 관리자 답변 시스템
+- JWT 기반 사용자/관리자 권한 분기 처리
 
 ---
 
