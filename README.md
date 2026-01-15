@@ -35,6 +35,45 @@
 
 ---
 
+## 📸 스크린샷
+
+### 메인 화면 (Pop 테마)
+<p align="center">
+  <img src="./screenshots/main(pop).JPG" alt="메인 화면" width="800"/>
+</p>
+
+### 4가지 테마 시스템
+| Classic | Dark | Christmas |
+|:-------:|:----:|:---------:|
+| <img src="./screenshots/theme(classic).JPG" alt="Classic 테마" width="280"/> | <img src="./screenshots/theme(dark).JPG" alt="Dark 테마" width="280"/> | <img src="./screenshots/theme(christmas).JPG" alt="Christmas 테마" width="280"/> |
+
+### 파티 시스템
+| 파티 목록 | 파티 상세 | 파티 생성 |
+|:--------:|:--------:|:--------:|
+| <img src="./screenshots/party.JPG" alt="파티 목록" width="280"/> | <img src="./screenshots/party_detail.JPG" alt="파티 상세" width="280"/> | <img src="./screenshots/addparty.JPG" alt="파티 생성" width="280"/> |
+
+### 금융 시스템
+| 내 지갑 | 결제 내역 | 보증금 내역 |
+|:------:|:--------:|:----------:|
+| <img src="./screenshots/MyWallet.JPG" alt="지갑" width="280"/> | <img src="./screenshots/PaymentHistoryList.JPG" alt="결제내역" width="280"/> | <img src="./screenshots/DepositHistoryList.JPG" alt="보증금내역" width="280"/> |
+
+### 관리자 대시보드
+| 대시보드 (상단) | 대시보드 (하단) |
+|:-------------:|:-------------:|
+| <img src="./screenshots/admin_Dashboard.JPG" alt="대시보드1" width="400"/> | <img src="./screenshots/admin_Dashboard2.JPG" alt="대시보드2" width="400"/> |
+
+### 관리자 - Push 알림 관리
+| 템플릿 관리 | 발송 내역 | 수동 발송 |
+|:----------:|:--------:|:--------:|
+| <img src="./screenshots/admin_pushTemplate.JPG" alt="템플릿" width="280"/> | <img src="./screenshots/admin_pushHistory.JPG" alt="발송내역" width="280"/> | <img src="./screenshots/admin_pushSend.JPG" alt="수동발송" width="280"/> |
+
+### 관리자 - 커뮤니티 관리
+| 문의 관리 | 문의 상세 | 답변 작성 |
+|:--------:|:--------:|:--------:|
+| <img src="./screenshots/admin_Inquiry.JPG" alt="문의목록" width="280"/> | <img src="./screenshots/admin_InquiryDetailModal.JPG" alt="문의상세" width="280"/> | <img src="./screenshots/admin_AnswerModal.JPG" alt="답변작성" width="280"/> |
+
+---
+
 ## ✨ 주요 기능
 
 ### 🎭 파티 관리
